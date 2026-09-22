@@ -1,0 +1,2 @@
+# EEG preprocessing pipeline
+WIP
