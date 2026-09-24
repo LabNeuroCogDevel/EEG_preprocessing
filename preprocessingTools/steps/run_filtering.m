@@ -15,7 +15,7 @@ end
 
 EEG.subject = subid;
 EEG.scandate = scandate;
-EEG.condition = currentName(findstr(currentName,'anti'):end);
+EEG.task = task_type;
 
 %% Filtering
 EEG = pop_eegfiltnew(EEG, lowBP, highBP, 3380, 0, [], 0);
@@ -29,11 +29,13 @@ EEG = pop_eegfiltnew(EEG, lowBP, highBP, 3380, 0, [], 0);
 EEG = pop_editset(EEG,'setname',[currentName '_bandpass_filtered']);
 
 %% Resample Data
-% Downsample the data to 512 Hz using anti-aliasing filter
-EEG = pop_resample(EEG, 512, 0.8, 0.4);
-%0.8 is fc and 0.4 is df. Default is .9 and .2. We dont know why Alethia changed them
-% df = anti-aliasing filter transition band width
-% fc = anti-aliasing filter cutoff
+% Downsample the data to 512 Hz using anti-aliasing filter if raw data was collected at a higher sampling frequency
+    if EEG.srate > 512
+    EEG = pop_resample(EEG, 512, 0.8, 0.4);
+    %0.8 is fc and 0.4 is df. Default is .9 and .2. We dont know why Alethia changed them
+    % df = anti-aliasing filter transition band width
+    % fc = anti-aliasing filter cutoff
+end
 
 EEG = eeg_checkset(EEG);
 
