@@ -19,14 +19,7 @@ arguments
     task
     maindir
     rawdir
-%     resting_state_type (1,1) double {mustBeMember(resting_state_type,[0 1])} = 1
 end
-
-% if resting_state_type == 1
-%     state = 'EyesOpen';
-% else
-%     state = 'EyesClosed';
-% end
 
 %% outline
 %   1. create folders
@@ -67,15 +60,19 @@ end
 
 dryrun = 0;
 
+% check if directories exist
+while ~isfolder(maindir)
+    maindir = input('maindir does not exist! Enter main directory: ','s');
+end
+
+while ~isfolder(rawdir)
+    rawdir = input('rawdir does not exist! Enter raw directory: ','s');
+end
+
 fprintf('\n===== PREPROCESSING SETTINGS =====\n');
 fprintf('Task                   : %s\n', task);
 fprintf('Preprocessed directory : %s\n', maindir);
 fprintf('Raw files directory    : %s\n', rawdir);
-
-% if task == "resting_state"
-%     fprintf('Resting state type : %s\n', state);
-% end
-
 fprintf('==================================\n');
 
 reply = input('Proceed? (y/n): ','s');
@@ -85,14 +82,9 @@ if ~strcmpi(reply,'y')
 end
 
 par_option = NaN; % user enters whether to use parallel processing or not
-while isnan(par_option)
-    par_option = str2double(input('Use parallel processing? (yes = 1, no = 0): ','s'));
-    par_option(~ismember(par_option,[0 1])) = NaN;
-end
 
 while isnan(par_option)
-    par_option = str2double(input('Use parallel processing? (y/n): ','s'));
-%     par_option(~ismember(par_option,[0 1])) = NaN;
+    par_option = input('Use parallel processing? (y/n): ','s');
 end
 
 if strcmp(par_option,'y')
@@ -106,19 +98,7 @@ elseif strcmp(par_option,'n')
     disp('Will process each file one at a time...');
 end
 
-% if par_option == 1
-%     num_workers = NaN; % if using parallel, prompt user to select number of workers
-%     while isnan(num_workers)
-%         worker_text = 'Enter number of workers to use (number of files to process in parallel): ';
-%         num_workers = str2double(input(worker_text , 's'));
-%     end
-%     fprintf('Will process %d files at a time...', num_workers);
-% else
-%     disp('Will process each file one at a time...');
-% end
-
 % load in paths to fieldtrip and eeglab
-
 addpath('/Volumes/Hera/Projects/7TBrainMech/scripts/fieldtrip-20180926/')
 addpath(genpath('/Volumes/Hera/EEG_toolkit/preprocessingTools'))
 run('/Volumes/Hera/EEG_toolkit/Resources/eeglab_current/eeglab2024.2/eeglab.m')
@@ -129,23 +109,35 @@ disp(msg)
 % create outpaths, create subfolders if they don't exist
 paths = create_output_paths(maindir, task);
 
+% study are we pulling data from- matters for cap locations and remarking
+if contains(rawdir,'SPA')
+    study = 'SPA';    
+elseif contains(rawdir, 'Habit')
+    study = 'Habit';
+elseif contains(rawdir,'7TBrainMech')
+    study = '7T';    
+else
+    error('Unable to define study')    
+end
+
 %% remarking
 % changes trials to be a single digit
 addpath('/Volumes/Hera/EEG_toolkit/preprocessingTools/functions/remark_functions/')
 % all raw EEGs from study
 rawEEGs = dir(fullfile(rawdir,'*','*.bdf'));
 % raw EEGs for specific task being preprocessed
-IDX = find(cellfun(@any,regexpi ( {namesOri.name}.', task)));
-n = length(IDX);
+IDX = find(cellfun(@any,regexpi ( {rawEEGs.name}.', task)));
+% set up error cell
+n = length(rawEEGs);
+errorRemarking = cell(n,2);
 
 % loop over all specific task EEGs
-errorRemarking = cell(n,2);
 for idx = IDX'
     % define current EEG
     currentName = regexprep(rawEEGs(idx).name,'\.bdf$','');
-    d = [namesOri(idx).folder '/'];
+    d = [rawEEGs(idx).folder '/'];
     % skip if already created
-    finalfile = fullfile(outputpath, [currentName '_' preprocVer '_Rem.set']);
+    finalfile = fullfile(paths.remarked, [currentName '_' preprocVer '_Rem.set']);
     if exist(finalfile,'file') && condition == 1
         fprintf('already have %s\n', finalfile)
         continue
@@ -160,130 +152,54 @@ for idx = IDX'
     EEG = pop_biosig([d currentName '.bdf']);
     EEG.setname=[currentName 'Rem'];
     
-    switch task
-        case "rest"
-            remark_resting_state()
-        case "habit"
-            remark_habit_task()
-        case "anti"
-            remark_AS()        
+    try
+        switch task
+            case "rest"
+                remark_resting_state(EEG, currentName, preprocVer, paths.remarked);
+            case "habit"
+                remark_habit_task(EEG, currentName, preprocVer, paths.remarked)
+            case "anti"                
+                if strcmp(study,'7T')
+                    remark_AS_7T(EEG, currentName, preprocVer, paths.remarked);
+                end
+        end
+    catch e
+        fprintf("Error remarking %s : %s\n",currentName,e.message)
+        errorRemarking{idx,1} = rawEEGs{i};
+        errorRemarking{idx,2} = e.message;
+        for s=e.stack
+            disp(s)
+        end
     end
 end
 
-if task == "resting_state"
-    remark_resting_state(paths.remarked, dryrun, task, rawdir, preprocVer, condition)
-elseif task == "habit"
-    remark_habit_task(paths.remarked, dryrun, task, rawdir, preprocVer, condition)
-end
-% remark(paths.remarked,dryrun,task,rawdir,preprocVer,condition);
-
+errorRemarking = errorRemarking(~cellfun(@isempty,errorRemarking(:,1)),:);
+allErrors.remarking = errorRemarking;
 %% gather all file paths for subjects remarked data
 setfilesDir = [paths.remarked, '/*.set'];
 remarked_files = all_remarked_set(setfilesDir);
 n = length(remarked_files); %number of EEG sets to preprocess
 
-if task == "anti"
-    % rename AS trials
-    errorRenaming = cell(n,2);
-    for i = 1:n
-        remarked_inputfile = remarked_files{i};
-        try
-            rename_AStrials(remarked_inputfile,paths.renamedtrials);
-        catch e
-            fprintf("Error renaming %s : %s\n",remarked_inputfile,e.message)
-            errorRenaming{i,1} = remarked_files{i};
-            errorRenaming{i,2} = e.message;
-            for s=e.stack
-                disp(s)
-            end
-        end    
-    end
-    
-    % get all renamed files
-    setfilesDir = [paths.remarked, '/*.set'];
-    remarked_files = all_remarked_set(setfilesDir);
-    n = length(remarked_files);
-    
-    errorRenaming = errorRenaming(~cellfun(@isempty,errorRenaming(:,1)),:);
-    allErrors.renaming = errorRenaming;
-elseif task == "dr"
-    for i = 1:n
-        remarked_inputfile = remarked_files{i};
-        try
-        rename_DRtrials(remarked_inputfile, paths.renamedtrials);
-        catch e
-            fprintf("Error renaming %s : %s\n",remarked_inputfile,e.message)
-            errorRenaming{i,1} = remarked_files{i};
-            errorRenaming{i,2} = e.message;
-            for s=e.stack
-                disp(s)
-            end
-        end
-    end
-    
-    % get all renamed files
-    setfilesDir = [paths.remarked, '/*.set'];
-    remarked_files = all_remarked_set(setfilesDir);
-    n = length(remarked_files);
-    
-    errorRenaming = errorRenaming(~cellfun(@isempty,errorRenaming(:,1)),:);
-    allErrors.renaming = errorRenaming;
-    
-end
-%maybe use clean_rawdata but need
-
 %% loop through every subject to preprocess
 % saving input files that failed to be preprocessed
-% displaying waitbar
-w = waitbar(0,sprintf("Starting %s preprocessing...",task),"Name",sprintf("%s preprocessing pipeline",task));
-% if task == "resting_state"
-%     
-%     errorTrimming = cell(n,2);
-%     
-%     for i = 1:n
-%         inputfile = remarked_files{i};
-%         % updating waitbar
-%         waitbar_filename = split(inputfile,"/");
-%         waitbar_name = waitbar_filename{end};
-%         split_name = split(waitbar_name,"_");
-%         lunaid = split_name{1};
-%         scandate = split_name{2};
-%         waitbar(i/n,w,sprintf("%s %s",lunaid,scandate))
-%         try
-%             trim_resting_state(inputfile, paths.trimmed)
-%         catch e
-%             fprintf('Error trimming "%s": %s\n', inputfile, e.message)
-%             errorTrimming{i,1} = remarked_files{i};
-%             errorTrimming{i,2} = e.message;
-%         end
-%     end
-%     if resting_state_type == 1
-%         setfilesDir = [paths.trimmed,'/*EyesOpen.set'];
-%     elseif resting_state_type == 0
-%         setfilesDir = [paths.trimmed,'/*EyesClosed.set'];
-%     end
-%     remarked_files = all_remarked_set(setfilesDir);
-%     n = length(remarked_files);
-%     
-%     errorTrimming = errorTrimming(~cellfun(@isempty,errorTrimming(:,1)),:);
-%     allErrors.trimming = errorTrimming;
-% end
-
 errorProcessing = cell(n,2);
 
-if par_option == 1
+if strcmp(par_option,'y')
     delete(gcp('nocreate')) % clear any existing parpool
     parpool(num_workers);
     parfor j = 1:n
         try
-            preprocessing_pipeline_V2(remarked_files{j},paths,lowBP,highBP,FLAG,condition,task)
+            preprocessing_pipeline_V2(remarked_files{j},paths,lowBP,highBP,FLAG,condition,task,study)
         catch e
             errorProcessing(j,:) = {remarked_files{j}, e.message};
         end
     end
     delete(gcp('nocreate')) % clear parpool
     
-elseif par_option == 0
+elseif strcmp(par_option,'n')
+    % displaying waitbar
+    w = waitbar(0,sprintf("Starting %s preprocessing...",task),"Name",sprintf("%s preprocessing pipeline",task));
+    
     for j = 1:n
         inputfile = remarked_files{j};
         % updating waitbar
@@ -294,7 +210,7 @@ elseif par_option == 0
         scandate = split_name{2};
         waitbar(j/n,w,sprintf("%s %s",lunaid,scandate))
         try
-            preprocessing_pipeline_V2(inputfile,paths,lowBP,highBP,FLAG,condition,task)
+            preprocessing_pipeline_V2(inputfile,paths,lowBP,highBP,FLAG,condition,task,study)
         catch e
             fprintf('Error processing "%s": %s\n',inputfile, e.message)
             errorProcessing{j,1} = remarked_files{j};
@@ -307,12 +223,21 @@ errorProcessing = errorProcessing(~cellfun(@isempty,errorProcessing(:,1)),:);
 allErrors.processing = errorProcessing;
 
 %% clean epochs and remove ones that are bad
-cleanICA_path = paths.ICAwholeclean_homogenize;
+if strcmp(study,'7T')
+    cleanICA_path = paths.ICAwholeclean_homogenize;
+elseif strcmp(study,'Habit') || strcmp(study,'SPA')
+    cleanICA_path = paths.ICAwholeclean;
+end
+
 epoch_folder = paths.epoch;
 marked_epoch_folder = paths.marked_epoch;
 kept_epoch_folder = paths.kept_epoch;
 
-EEGfileNames = dir([cleanICA_path, '/*_CleanICA_Homogenize.set']);
+if strcmp(study,'7T')
+    EEGfileNames = dir([cleanICA_path, '/*_CleanICA_Homogenize.set']);
+elseif strcmp(study,'Habit') || strcmp(study,'SPA')
+    EEGfileNames = dir([cleanICA_path, '/*_CleanICA.set']);
+end
 
 n = size(EEGfileNames,1);
 errorEpoch = cell(n,2);
