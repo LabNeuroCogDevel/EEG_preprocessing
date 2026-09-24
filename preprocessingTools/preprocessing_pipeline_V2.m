@@ -1,4 +1,4 @@
-function [] = preprocessing_pipeline_V2(inputfile, outpath, lowBP, highBP, FLAG, condition, task, varargin)
+function [] = preprocessing_pipeline_V2(inputfile, outpath, lowBP, highBP, FLAG, condition, task, study, varargin)
 % sanvi korsapathy 06.05.2026
 % history of edits: see bottom of file
 % runs from run_preprocessing function, or run_par_preprocessing function 
@@ -9,8 +9,6 @@ if ~exist(inputfile,"file")
 end
 
 %% initialize
-
-% TO DO: Extract study from file path so that the correct cap can be select
 
 [~, currentName, ~ ] = fileparts(inputfile);
 parts = split(currentName,'_');
@@ -108,21 +106,6 @@ else
     EEG = pop_saveset(EEG, 'filename', linenoise_name, 'filepath', outpath.removeLineNoise);
 end
 
-% %% Zap line to remove electrical noise
-% if condition == 1 && exist(lineNoisefile, 'file')
-%         warning('%s already removed line noise! Skipping ZapLine step.', currentName)
-%         EEG = pop_loadset(lineNoisefile);
-%     else
-%         condition = 0; % since new file is created, rerun preproc on new file
-% 
-%         EEG = clean_data_with_zapline_plus_eeglab_wrapper(EEG, struct('noisefreqs', [60]));
-%         zapReportPath = fullfile(outpath.removeLineNoise, linenoise_name);
-%         saveas(gcf, zapReportPath, 'png'); % save ZapLine report to same folder as data
-% 
-%         % save data without line noise
-%         EEG = pop_saveset(EEG, 'filename', linenoise_name, 'filepath', outpath.removeLineNoise);
-% end
-
 %% Channels
 if condition == 1 && exist(chanrjfile, 'file')
     warning('%s already removed bad channels! Skipping channel rejection step.', currentName)
@@ -199,36 +182,40 @@ end
 
 
 %% Homogenize Chanloc
-if condition == 1 && exist(HomogenizedFile, 'file')
-    warning('%s already automatically homogenized! Skipping homogenize step.', currentName)
-    EEG = pop_loadset(HomogenizedFile);
-else
-    datapath = outpath.ICAwholeclean;
-    savepath = outpath.ICAwholeclean_homogenize;
-    correction_cap_location = hera('Projects/7TBrainMech/scripts/eeg/Shane/resources/ELchanLoc.ced');
-    CL = importdata(correction_cap_location);
-    CL.n = CL.textdata(2:end-2,1);
-    CL.name = CL.textdata(2:end-2,2);
-    
-    EEG_old  = EEG;
-    CL_old.name = {EEG_old.chanlocs.labels}';
-    CL_old.n = {EEG_old.chanlocs.urchan}';
-    
-    differ = find(~strcmp(CL.name, CL_old.name(1:64)));
-    for idealIDX = differ'
-        previousIDX = find(strcmp(CL.name(idealIDX), CL_old.name));
-        EEG.chanlocs(idealIDX) = EEG_old.chanlocs(previousIDX);     % update ChanLoc
-        EEG.chanlocs(idealIDX).urchan  = idealIDX;                  % update number *maybe not mandatory
-        EEG.data(idealIDX,:) = EEG_old.data(previousIDX,:);         % move data
+
+if strcmp(study,'7T')
+    if condition == 1 && exist(HomogenizedFile, 'file')
+        warning('%s already automatically homogenized! Skipping homogenize step.', currentName)
+        EEG = pop_loadset(HomogenizedFile);
+    else
+        datapath = outpath.ICAwholeclean;
+        savepath = outpath.ICAwholeclean_homogenize;
+        correction_cap_location = hera('Projects/7TBrainMech/scripts/eeg/Shane/resources/ELchanLoc.ced');
+        CL = importdata(correction_cap_location);
+        CL.n = CL.textdata(2:end-2,1);
+        CL.name = CL.textdata(2:end-2,2);
+
+        EEG_old  = EEG;
+        CL_old.name = {EEG_old.chanlocs.labels}';
+        CL_old.n = {EEG_old.chanlocs.urchan}';
+
+        differ = find(~strcmp(CL.name, CL_old.name(1:64)));
+        for idealIDX = differ'
+            previousIDX = find(strcmp(CL.name(idealIDX), CL_old.name));
+            EEG.chanlocs(idealIDX) = EEG_old.chanlocs(previousIDX);     % update ChanLoc
+            EEG.chanlocs(idealIDX).urchan  = idealIDX;                  % update number *maybe not mandatory
+            EEG.data(idealIDX,:) = EEG_old.data(previousIDX,:);         % move data
+        end
+        EEG = pop_saveset(EEG, 'filename', homogenize_name, 'filepath', outpath.ICAwholeclean_homogenize);
+        condition = 0;
     end
-    EEG = pop_saveset(EEG, 'filename', homogenize_name, 'filepath', outpath.ICAwholeclean_homogenize);
-    condition = 0;
 end
 
+%% Create QC figure (spectrum of each channel)
 if condition == 0
     figure;
     spectopo(EEG.data,0,EEG.srate, 'freqrange', [2 70]);
-    title(sprintf('SubID: %s, Scan Date: %s', parts{1}, parts{2}));
+    title(sprintf('SubID: %s, Scan Date: %s', subid,scandate));
     savefig(fullfile(outpath.finalSpectra,[currentName '.fig']));
     exportgraphics(gcf,fullfile(outpath.finalSpectra,[currentName '.png']));
     close all;
