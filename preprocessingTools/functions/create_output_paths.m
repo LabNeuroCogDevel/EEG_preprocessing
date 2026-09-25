@@ -9,17 +9,22 @@ mkdir(maindir);
 subfolders = {'qualityCheck', 'finalSpectra', 'runICA', 'remarked', 'filtered', 'removeLineNoise', 'channels_rejected', 'interpolated', 'rerefwhole', 'ICAwhole', 'AfterWhole'};
 
 % additional folders based on task type
-if task == "resting_state"
-    subfolders = [subfolders, {'trimmed'}];
-else
-    subfolders = [subfolders, {'renamedtrials'}];
-end
+% if task == "resting_state"
+%     subfolders = [subfolders, {'trimmed'}];
+% else
+%     subfolders = [subfolders, {'renamedtrials'}];
+% end
     
 % add all folders to directory
 for i = 1:numel(subfolders)
     folderPath = fullfile(maindir, subfolders{i});
     paths.(subfolders{i}) = folderPath;
-    mkdir(folderPath);
+    if isfolder(folderPath)
+        fprintf("%s folder already exists; skipping\n", folderPath)
+        continue
+    else
+        mkdir(folderPath);
+    end
 end
 
 % create subfolders for AfterWhole
@@ -30,7 +35,12 @@ AfterWhole_folders = {'epoch', 'ICAwholeclean', 'ICAwholeclean_homogenize', 'kep
 for i = 1:numel(AfterWhole_folders)
     folderPath = fullfile(AfterWholeDir, AfterWhole_folders{i});
     paths.(AfterWhole_folders{i}) = folderPath;
-    mkdir(folderPath);
+    if isfolder(folderPath)
+        fprintf("%s folder already exists; skipping\n", folderPath)
+        continue
+    else
+        mkdir(folderPath);
+    end
 end
 
 paths.main = maindir;
