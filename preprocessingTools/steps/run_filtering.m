@@ -30,7 +30,7 @@ EEG = pop_editset(EEG,'setname',[currentName '_bandpass_filtered']);
 
 %% Resample Data
 % Downsample the data to 512 Hz using anti-aliasing filter if raw data was collected at a higher sampling frequency
-    if EEG.srate > 512
+if EEG.srate > 512
     EEG = pop_resample(EEG, 512, 0.8, 0.4);
     %0.8 is fc and 0.4 is df. Default is .9 and .2. We dont know why Alethia changed them
     % df = anti-aliasing filter transition band width

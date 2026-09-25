@@ -60,7 +60,7 @@ end
 % maybe use clean_rawdata but need to tweak from original pipeline
 
 % originalEEG has channel locations and external channels removed- need for determining which channels have been rejected
-% originalEEG = EEG;
+originalEEG = EEG;
 EEG.origchanlocs = EEG.chanlocs;
 
 EEG = clean_rawdata(EEG, 8, -1, 0.7, 5, 15, 0.3);
@@ -71,9 +71,9 @@ EEG = clean_rawdata(EEG, 8, -1, 0.7, 5, 15, 0.3);
 % LOOK AT OTHER PARAMETERS
 
 % what is clean_channel_mask???
-if ~any(find(cellfun (@any,regexpi (fieldnames(EEG.etc), 'clean_channel_mask'))))
-    EEG.etc.clean_channel_mask=42;
-end
+% if ~any(find(cellfun (@any,regexpi (fieldnames(EEG.etc), 'clean_channel_mask'))))
+%     EEG.etc.clean_channel_mask=42;
+% end
 
 %save the channels that were rejected in a variable
 channels_removed{1} = chrm_name; %setname
@@ -92,6 +92,20 @@ data_removed{3} = length(find(EEG.etc.clean_sample_mask==0))/length(EEG.etc.clea
 %also save the data that were rejected in the EEG struct
 EEG.data_rj    = data_removed{2};
 EEG.data_rj_nr = data_removed{3};
+
+% In channels_rj folder create new subject folder to save figures for QC
+channelsrj_subfolder = [ char(string(subid)) '_' char(string(scandate))];
+channelsrj_subpath = fullfile(outpath.channels_rejected, channelsrj_subfolder);
+if isfolder(channelsrj_subpath)
+    fprintf("%d %d already has marked ICA folder; skipping\n",subid,scandate)
+else
+    mkdir(channelsrj_subpath)
+end
+
+% visualize data removed and save interactive figure
+vis_artifacts(EEG,originalEEG,'DisplayMode','diff')
+savefig(fullfile(channelsrj_subpath,[char(string(subid)) '_' char(string(scandate)) '_chansrj.fig']))
+close all
 
 %change setname
 EEG = pop_editset(EEG,'setname', chrm_name);

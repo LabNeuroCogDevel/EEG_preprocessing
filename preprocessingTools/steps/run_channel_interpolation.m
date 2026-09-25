@@ -49,6 +49,8 @@ if Flag128 == 1 % no clue what is going on here using from original pipeline
     %     EEG.chaninfo.filecontent(3,1) = '2';
     EEG.data(2,:) = EEG_i.data(3,:);% ALERT ALERT Lines latelly added
     EEG.data(3,:) = EEG_i.data(2,:);% ATERT ALERT Lines latelly added
+    EEG = pop_saveset( EEG,'filename', interp_name, ...
+        'filepath', outpath.interpolated);
 else
     EEG = pop_interp(EEG, EEG.origchanlocs, 'spherical');
     EEG = pop_saveset( EEG,'filename', interp_name, ...
