@@ -42,18 +42,18 @@ preprocVer = '20260922';
 % initial values
 lowBP = 0.5;
 highBP = 70;
-FLAG = 1; % re-reference to channel average
+% FLAG = 1; % re-reference to channel average
 
 % settings
 only128 = 0; % 0 = do all subjects, 1 = only 128 channel subjects
 overwrite_reply = input('Overwrite existing files? (y/n): ','s');
 
-if strcmp(overwrite_reply,'y') % 0 = overwrite existing files; 1 = skip completed files
+if strcmp(overwrite_reply,'y') % y = overwrite existing files; n = skip completed files
     fprintf("Will overwrite existing files\n")
-    condition = 0;
+    overwrite = 1;
 elseif strcmp(overwrite_reply,'n')
     fprintf('Will skip files already preprocessed\n')
-    condition = 1;
+    overwrite = 0;
 else
     error('Preprocessing aborted by user.')
 end
@@ -138,7 +138,7 @@ for idx = IDX'
     d = [rawEEGs(idx).folder '/'];
     % skip if already created
     finalfile = fullfile(paths.remarked, [currentName '_' preprocVer '_Rem.set']);
-    if exist(finalfile,'file') && condition == 1
+    if exist(finalfile,'file') && overwrite == 0
         fprintf('already have %s\n', finalfile)
         continue
     end
@@ -180,16 +180,44 @@ setfilesDir = [paths.remarked, '/*.set'];
 remarked_files = all_remarked_set(setfilesDir);
 n = length(remarked_files); %number of EEG sets to preprocess
 
+%% load in file with demographic information 
+if strcmp(study,'7T')
+    age_df = readtable('/Volumes/Hera/Projects/7TBrainMech/scripts/txt/merged_7t.csv');
+    age_df.ses = age_df.visitno;
+elseif strcmp(study,'Habit')
+    age_df = readtable('/Volumes/Hera/Projects/Habit/redcap/data/eeg_mr_vdate.csv');
+    age_df.eeg_date = age_df.eeg;
+elseif strcmp(study,'SPA')
+    % TODO!!! add SPA ages
+end
+
 %% loop through every subject to preprocess
 % saving input files that failed to be preprocessed
 errorProcessing = cell(n,2);
-
+errorAddingAge = cell(n,2);
 if strcmp(par_option,'y')
     delete(gcp('nocreate')) % clear any existing parpool
     parpool(num_workers);
     parfor j = 1:n
+        inputfile = remarked_files{j};
+        splitfilename = split(inputfile,"/");
+        filename = splitfilename{end};
+        splitname = split(filename,"_");
+        lunaid = str2double(splitname{1});
+        scandate = str2double(splitname{2});
+        eeg_age = [];
+        ses = [];
+        subidx = find(age_df.lunaid == lunaid & age_df.eeg_date == scandate);
+        try 
+            subtable = age_df(subidx,:);
+            eeg_age = subtable.eeg_age;
+            ses = subtable.ses;
+        catch e
+            fprintf('Error adding age "%s": %s\n',inputfile, e.message)
+            errorAddingAge(j,:) = {remarked_files{j}, e.message};
+        end
         try
-            preprocessing_pipeline_V2(remarked_files{j},paths,lowBP,highBP,FLAG,condition,task,study)
+            preprocessing_pipeline_V2(remarked_files{j},paths,lowBP,highBP,overwrite,task,study,eeg_age,ses)
         catch e
             errorProcessing(j,:) = {remarked_files{j}, e.message};
         end
@@ -208,9 +236,19 @@ elseif strcmp(par_option,'n')
         split_name = split(waitbar_name,"_");
         lunaid = split_name{1};
         scandate = split_name{2};
+        eeg_age = [];
+        ses=[];
         waitbar(j/n,w,sprintf("%s %s",lunaid,scandate))
+        try 
+            subtable = age_df(subidx,:);
+            eeg_age = subtable.eeg_age;
+            ses = subtable.ses;
+        catch e
+            fprintf('Error adding age "%s": %s\n',inputfile, e.message)
+            errorAddingAge(j,:) = {remarked_files{j}, e.message};
+        end
         try
-            preprocessing_pipeline_V2(inputfile,paths,lowBP,highBP,FLAG,condition,task,study)
+            preprocessing_pipeline_V2(inputfile,paths,lowBP,highBP,overwrite,task,study,eeg_age,ses)
         catch e
             fprintf('Error processing "%s": %s\n',inputfile, e.message)
             errorProcessing{j,1} = remarked_files{j};
@@ -221,7 +259,8 @@ elseif strcmp(par_option,'n')
 end
 errorProcessing = errorProcessing(~cellfun(@isempty,errorProcessing(:,1)),:);
 allErrors.processing = errorProcessing;
-
+errorAddingAge = errorAddingAge(~cellfun(@isempty,errorAddingAge(:,1)),:);
+allErrors.addingage = errorAddingAge;
 %% clean epochs and remove ones that are bad
 if strcmp(study,'7T')
     cleanICA_path = paths.ICAwholeclean_homogenize;
@@ -242,8 +281,8 @@ end
 n = size(EEGfileNames,1);
 errorEpoch = cell(n,2);
 
-view_events_eeg = pop_loadset(fullfile(cleanICA_path, EEGfileNames(1).name));
-disp({view_events_eeg.event.type});
+% view_events_eeg = pop_loadset(fullfile(cleanICA_path, EEGfileNames(1).name));
+% disp({view_events_eeg.event.type});
 
 revisar = {};
 if task ~= "resting_state"

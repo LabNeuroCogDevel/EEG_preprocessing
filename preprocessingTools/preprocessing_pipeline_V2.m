@@ -1,7 +1,20 @@
-function [] = preprocessing_pipeline_V2(inputfile, outpath, lowBP, highBP, FLAG, condition, task, study, varargin)
+function [] = preprocessing_pipeline_V2(inputfile, outpath, lowBP, highBP, overwrite, task, study, eeg_age, ses)
 % sanvi korsapathy 06.05.2026
+% abby beatt
 % history of edits: see bottom of file
 % runs from run_preprocessing function, or run_par_preprocessing function 
+
+arguments
+    inputfile
+    outpath
+    lowBP
+    highBP
+    overwrite
+    task
+    study
+    eeg_age (1,1) double = []
+    ses (1,1) double = []
+end
 
 % find file we are using
 if ~exist(inputfile,"file")
@@ -14,9 +27,9 @@ end
 parts = split(currentName,'_');
 subid = str2double(parts{1});
 scandate = str2double(parts{2});
-task_type = str2double(parts{3});
-preprocVer = str2double(parts{4});
-% 
+task_type = parts{3};
+preprocVer = parts{4};
+ 
 % if task ~= "resting_state"
 %     currentName = strjoin(parts(1:end-1), '_');
 % end
@@ -30,8 +43,8 @@ if ~exist(correction_cap_location, 'file'), error('cannot find file for correcti
 
 %% Files
 % to know how far your script is with running
-fprintf('==========\n%s:\n\t Initial Preprocessing(%s,%f,%f,%s,%s)\n',...
-    currentName, inputfile, lowBP, highBP, outpath.main, task)
+fprintf('==========\n%d %d:\n\t Initial Preprocessing(%.1f,%.1f,%s)\n',...
+    subid, scandate,lowBP, highBP, task)
 
 % filenames
 filter_name = [currentName '_filtered'];
@@ -70,7 +83,7 @@ commonPlus = {'AFz','C1','C2','C3','C4','C5','C6','CP1','CP2','CP3','CP4',...
 
 %% checking whether or not to rerun
 % checking if quality check file already exists (subject already preprocessed)
-if condition == 1
+if overwrite ==  0
     if exist(QC_file, 'file')
         warning('%s already complete! todo load from file', currentName)
         return
@@ -79,35 +92,40 @@ end
 
 %% loading filtered EEG if created
 % making filtered EEG current EEG if already did filtering
-if condition == 1 && exist(filteredFile, 'file')
+if overwrite ==  0 && exist(filteredFile, 'file')
     warning('%s already filtered! Skipping filtering step.', currentName)
     EEG = pop_loadset(filteredFile);
     
     % making sure Flag128 is set if skipping filtering
-    if size(EEG.data) < 100
+    if size(EEG.data,1) < 100
         % [65 66] are mastoid externals
         Flag128 = 0;
-    else
-        Flag128 =1;
+    elseif size(EEG.data,1) > 100
+        Flag128 = 1;
     end
     
 else % if filtered EEG does not exist running rereferencing, filtering, and resampling
-    condition = 0; % since new file is created, rerun preproc on new file
+    overwrite = 1; % since new file is created, rerun preproc on new file
     run_filtering
 end
 
+%% add age and session number to EEG structure
+EEG.eeg_age = eeg_age;
+EEG.session = ses;
+
 %% Notch filter at 60Hz for line noise
-if condition == 1 && exist(lineNoisefile, 'file')
+if overwrite == 0 && exist(lineNoisefile, 'file')
     warning('%s already removed line noise! Skipping notch step.', currentName)
     EEG = pop_loadset(lineNoisefile);
 else
-    condition = 0; % since new file is created, rerun preproc on new file
+    overwrite = 1; % since new file is created, rerun preproc on new file
     EEG = pop_eegfiltnew(EEG, 59, 61, [], 1, [], 0);
+    EEG = pop_editset(EEG,'setname',linenoise_name);
     EEG = pop_saveset(EEG, 'filename', linenoise_name, 'filepath', outpath.removeLineNoise);
 end
 
 %% Channels
-if condition == 1 && exist(chanrjfile, 'file')
+if overwrite == 0 && exist(chanrjfile, 'file')
     warning('%s already removed bad channels! Skipping channel rejection step.', currentName)
     EEG = pop_loadset(chanrjfile);
 else
@@ -119,31 +137,32 @@ end
 % POSSIBLE PROBLEMS
 %  - injecting extra channels ontop of expected 64 (n>64)
 %  - 128 missing expected labels, adding too few back (n<64)
-if condition == 1 && exist(interpfile, 'file')
+if overwrite == 0 && exist(interpfile, 'file')
     warning('%s already interpolated! Skipping interpolation step.', currentName)
     EEG = pop_loadset(interpfile);
 else
-    condition = 0; % since new file is created, rerun preproc on new file
+    overwrite = 1; % since new file is created, rerun preproc on new file
     run_channel_interpolation
 end
 
 %% Re-reference: Average Reference
-if condition == 1 && exist(rerefFile, 'file')
+if overwrite == 0 && exist(rerefFile, 'file')
     warning('%s already rereferenced! Skipping rereferencing step.', currentName)
     EEG = pop_loadset(rerefFile);
 else
-    condition = 0; % since new file is created, rerun preproc on new file
+    overwrite = 1; % since new file is created, rerun preproc on new file
     run_rereference
 end
 
 %% run ICA on downsampled data
-if condition == 1 && exist(runICAFile, 'file')
-    warning('%s already ran ICA! Skipping ICA decomposition step.', currentName)
-    EEG = pop_loadset(runICAFile);
+% Compute ICA components on downsampled data (for speed)
+if overwrite == 0 && exist(runICAFile, 'file')
+    warning('%s already ran ICA! Skipping ICA decomposition step.\nLoading in rereferenced file', currentName)
+    EEG = pop_loadset(rerefFile); % need to load in referenced file b/c if ICA decomp worked but error in applying to non-downsampled data new EEG saved will have 256 Hz sampling rate
 else
-    condition = 0; % since new file is created, rerun preproc on new file
-    icawholein = fullfile(outpath.rerefwhole, [rerefwhole_name '.set']);
-    wholeout = outpath.ICAwhole;
+    overwrite = 1; % since new file is created, rerun preproc on new file
+%     icawholein = fullfile(outpath.rerefwhole, [rerefwhole_name '.set']);
+%     wholeout = outpath.ICAwhole;
     
     % create copy of rereferenced file and downsample to 256Hz to run ICA
     EEG_down = EEG;
@@ -155,28 +174,28 @@ else
     EEG_down = pop_saveset(EEG_down, 'filename', runICA_name, 'filepath', outpath.runICA);
 end
 
-if condition == 1 && exist(WholeICAFile, 'file')
+% 
+if overwrite == 0 && exist(WholeICAFile, 'file')
     warning('%s already applied ICA! Skipping ICA application step.', currentName)
     EEG = pop_loadset(WholeICAFile);
 else
-    condition = 0;
+    overwrite = 1;
     % apply ICA decomposition from downsampled data to 512Hz data
-    EEG_down = pop_loadset(runICAFile);
+    EEG_down = pop_loadset(runICAFile); % load in runICAFile to apply ICA decomp to non-downsampled rereferenced data
     EEG.icaweights = EEG_down.icaweights;
     EEG.icasphere = EEG_down.icasphere;
     EEG.icawinv = EEG_down.icawinv;
     EEG.icachansind = EEG_down.icachansind;
     EEG = pop_saveset(EEG, 'filename', icawholeout_name, 'filepath', outpath.ICAwhole);
-
 end
 
 
 %% select ICA components to reject
-if condition == 1 && exist(CleanICAFile, 'file')
+if overwrite == 0 && exist(CleanICAFile, 'file')
     warning('%s already automatically rejected ICs! Skipping IC rejection step.', currentName)
     EEG = pop_loadset(CleanICAFile);
 else
-    condition = 0; % since new file is created, rerun preproc on new file
+    overwrite = 1; % since new file is created, rerun preproc on new file
     run_autoICArejection
 end
 
@@ -184,12 +203,12 @@ end
 %% Homogenize Chanloc
 
 if strcmp(study,'7T')
-    if condition == 1 && exist(HomogenizedFile, 'file')
+    if overwrite == 0 && exist(HomogenizedFile, 'file')
         warning('%s already automatically homogenized! Skipping homogenize step.', currentName)
         EEG = pop_loadset(HomogenizedFile);
     else
-        datapath = outpath.ICAwholeclean;
-        savepath = outpath.ICAwholeclean_homogenize;
+%         datapath = outpath.ICAwholeclean;
+%         savepath = outpath.ICAwholeclean_homogenize;
         correction_cap_location = hera('Projects/7TBrainMech/scripts/eeg/Shane/resources/ELchanLoc.ced');
         CL = importdata(correction_cap_location);
         CL.n = CL.textdata(2:end-2,1);
@@ -207,21 +226,60 @@ if strcmp(study,'7T')
             EEG.data(idealIDX,:) = EEG_old.data(previousIDX,:);         % move data
         end
         EEG = pop_saveset(EEG, 'filename', homogenize_name, 'filepath', outpath.ICAwholeclean_homogenize);
-        condition = 0;
+        overwrite = 1;
     end
 end
 
 %% Create QC figure (spectrum of each channel)
-if condition == 0
+if overwrite == 1
     figure;
     spectopo(EEG.data,0,EEG.srate, 'freqrange', [2 70]);
-    title(sprintf('SubID: %s, Scan Date: %s', subid,scandate));
-    savefig(fullfile(outpath.finalSpectra,[currentName '.fig']));
+    title(sprintf('SubID: %d, Scan Date: %d', subid,scandate));
+%     savefig(fullfile(outpath.finalSpectra,[currentName '.fig']));
     exportgraphics(gcf,fullfile(outpath.finalSpectra,[currentName '.png']));
     close all;
 end
 
-create_eeg_qc_file
+%% Create QC file
+qc = struct();
+
+% general information
+qc.preproc_ver = preprocVer;
+qc.task = task_type;
+qc.subid = subid;
+qc.scandate = scandate;
+qc.removed_chans = EEG.channels_rj;
+qc.num_removed_chans = EEG.channels_rj_nr;
+qc.removed_data = EEG.data_rj;
+qc.num_removed_data = EEG.data_rj_nr;
+
+% ICA component informaiton
+EEGICA = pop_loadset(MarkedICAFile);
+rejectedICs = find(EEGICA.reject.gcompreject);
+qc.num_ICs_reject = numel(rejectedICs);
+% define the IC class label the components removed got
+ICclass = EEGICA.etc.ic_classification.ICLabel.classifications;
+rejectedICs_classes = ICclass(rejectedICs,:);
+% names of classes
+classNames = EEGICA.etc.ic_classification.ICLabel.classes;
+[~,classIdx] = max(rejectedICs_classes,[],2); % just get class which the component ranked the highest in
+
+for i = 1:numel(rejectedICs) % add info to qc struct
+    qc.ICs_reject(i).IC = rejectedICs(i);
+    qc.ICs_reject(i).ICs_reject_classification = ICclass(rejectedICs(i),:);
+    qc.ICs_reject(i).ICs_reject_main_class = classNames{classIdx(i)};
+end
+
+% add variance before and after ICA
+qc.original_variance= EEG.etc.varBeforeICArej;
+qc.final_variance = EEG.etc.varAfterICArej;
+removedVar = qc.original_variance-qc.final_variance;
+percentVarRemoved = 100*removedVar/qc.original_variance;
+qc.percent_variance_removed = percentVarRemoved;
+
+% add final rank of the data
+qc.final_rank = rank(EEG.data');
+save(fullfile(QC_file),'qc');
 
 end
 
