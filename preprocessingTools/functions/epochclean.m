@@ -1,12 +1,11 @@
-function [revisar] = epochclean(input_file,epoch_folder,marked_epoch_folder,kept_epoch_folder,epoch_event, epoch_limits)
+function [revisar] = epochclean(input_file,epoch_folder,marked_epoch_folder,kept_epoch_folder,overwrite,epoch_event, epoch_limits)
 
 %% function inputs
 % input_file = EEG file to be epoched
 % epoch_folder = folder to save epoched data before rejection
 % marked_epoch_folder = folder to save epochs marked to be rejected
 % kept_epoch_folder = folder to save epochs remaining after rejection
-% task = task specified when starting preprocessing pipeline
-% epoch_event = numeric vector of events to be epoched to
+% epoch_event = string vector of events to be epoched to
 % epoch_limits =  before and after the event (in seconds)
 
 arguments
@@ -14,7 +13,8 @@ arguments
     epoch_folder
     marked_epoch_folder
     kept_epoch_folder
-    epoch_event
+    overwrite
+    epoch_event (1,:) string    
     epoch_limits (1,2) double = []
 end
 
@@ -29,7 +29,7 @@ if ~exist(input_file,'file')
     error('inputfile "%s" does not exist!', input_file) 
 end
 
-[d, currentName, ext ] = fileparts(input_file);
+[~, currentName, ~] = fileparts(input_file);
 
 % start and end time of epoch 
 before = epoch_limits(1);
@@ -41,34 +41,42 @@ kept_epochname = [currentName '_epochs_kept_' strjoin(epoch_event,'-') '.set'];
 epoch_name = [currentName '_epochs_' strjoin(epoch_event,'-') '.set'];
 
 % skip if kept epoch file exists
-if exist(fullfile(kept_epoch_folder, kept_epochname),'file')
-    OUTEEG = [];
+if exist(fullfile(kept_epoch_folder, kept_epochname),'file') && overwrite == 0
     fprintf('skipping; already created %s\n',kept_epochname)
     return
 end
 
 % where to find eeglab stuff
-eeglabpath = fileparts(which('eeglab'));
-[ALLEEG EEG CURRENTSET ALLCOM] = eeglab("nogui");
+% eeglabpath = fileparts(which('eeglab'));
+% [ALLEEG EEG CURRENTSET ALLCOM] = eeglab("nogui");
 
 EEG = pop_loadset(input_file);
 if EEG.nbchan~=64
-    revisar = input_file;
     error('prog:input',"%s does not have 64 channels",currentName)
 end
 
-[ALLEEG EEG] = eeg_store(ALLEEG, EEG, CURRENTSET);
+% [ALLEEG EEG] = eeg_store(ALLEEG, EEG, CURRENTSET);
 
 
 %% epoching
+% make all EEG.event.type strings
+for i = 1:length(EEG.event)
+   if isnumeric(EEG.event(i).type)
+       EEG.event(i).type = num2str(EEG.event(i).type);
+   elseif iscell(EEG.event(i).type)
+       EEG.event(i).type = string(EEG.event(i).type);
+   end
+end
+EEG = eeg_checkset(EEG,'eventconsistency');
+
 % For anti: epoch to fixation onset and get -1 to 1 seconds
 EEG = pop_epoch(EEG, epoch_event, [before after], 'newname', epoch_name,'epochinfo','yes');
-[ALLEEG EEG CURRENTSET] = pop_newset(ALLEEG, EEG, 4,'overwrite','on','gui','off');
+% [ALLEEG EEG CURRENTSET] = pop_newset(ALLEEG, EEG, 4,'overwrite','on','gui','off');
 
 %save epoched eegsets
 EEG = pop_saveset( EEG,'filename',[epoch_name], ...
     'filepath',epoch_folder);
-[ALLEEG EEG] = eeg_store(ALLEEG, EEG, CURRENTSET);
+% [ALLEEG EEG] = eeg_store(ALLEEG, EEG, CURRENTSET);
 
 % ~10% should be rejected.
 
@@ -89,11 +97,11 @@ EEG = pop_jointprob(EEG,1,[1:EEG.nbchan],6,2,0,0,0,[],0);
 
 %save marked epochs (to check later if you agree with the removed opochs)
 EEG = pop_editset(EEG,'setname',[currentName marked_epochname]);
-[ALLEEG EEG] = eeg_store(ALLEEG, EEG, CURRENTSET);
+% [ALLEEG EEG] = eeg_store(ALLEEG, EEG, CURRENTSET);
 
 EEG = pop_saveset( EEG,'filename',[currentName marked_epochname], ...
     'filepath',marked_epoch_folder);
-[ALLEEG EEG] = eeg_store(ALLEEG, EEG, CURRENTSET);
+% [ALLEEG EEG] = eeg_store(ALLEEG, EEG, CURRENTSET);
 
 %reject epochs
 EEG = pop_rejepoch(EEG, find(EEG.reject.rejjp), 0);
@@ -101,7 +109,7 @@ EEG = pop_rejepoch(EEG, find(EEG.reject.rejjp), 0);
 %save epochs rejected EEG data
 %this saves the non-rejected epochs
 EEG = pop_editset(EEG, 'setname', kept_epochname);
-[ALLEEG EEG] = eeg_store(ALLEEG, EEG, CURRENTSET);
+% [ALLEEG EEG] = eeg_store(ALLEEG, EEG, CURRENTSET);
 
 EEG = pop_saveset(EEG, 'filename', kept_epochname, 'filepath',kept_epoch_folder);
-[ALLEEG EEG] = eeg_store(ALLEEG, EEG, CURRENTSET);
+% [ALLEEG EEG] = eeg_store(ALLEEG, EEG, CURRENTSET);
