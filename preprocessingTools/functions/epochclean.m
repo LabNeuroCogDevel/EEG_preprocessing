@@ -1,4 +1,4 @@
-function [revisar] = epochclean(input_file,epoch_folder,marked_epoch_folder,kept_epoch_folder,overwrite,epoch_event, epoch_limits)
+function [] = epochclean(input_file,epoch_folder,marked_epoch_folder,kept_epoch_folder,overwrite,epoch_event, epoch_limits, resting_state)
 
 %% function inputs
 % input_file = EEG file to be epoched
@@ -16,6 +16,7 @@ arguments
     overwrite
     epoch_event (1,:) string    
     epoch_limits (1,2) double = []
+    resting_state (1,:) double = 0
 end
 
 if isempty(epoch_limits)
@@ -23,7 +24,6 @@ if isempty(epoch_limits)
     epoch_limits = [-1 1];
 end
 
-revisar = {};
 % what file are we using
 if ~exist(input_file,'file')
     error('inputfile "%s" does not exist!', input_file) 
@@ -36,9 +36,9 @@ before = epoch_limits(1);
 after = epoch_limits(2);
 
 % defining file save names
-marked_epochname = [currentName '_epochs_marked_' strjoin(epoch_event,'-') '.set'];
-kept_epochname = [currentName '_epochs_kept_' strjoin(epoch_event,'-') '.set'];
-epoch_name = [currentName '_epochs_' strjoin(epoch_event,'-') '.set'];
+marked_epochname = [currentName '_epochs_marked_' char(strjoin(epoch_event,'-')) '.set'];
+kept_epochname = [currentName '_epochs_kept_' char(strjoin(epoch_event,'-')) '.set'];
+epoch_name = [currentName '_epochs_' char(strjoin(epoch_event,'-')) '.set'];
 
 % skip if kept epoch file exists
 if exist(fullfile(kept_epoch_folder, kept_epochname),'file') && overwrite == 0
@@ -55,8 +55,30 @@ if EEG.nbchan~=64
     error('prog:input',"%s does not have 64 channels",currentName)
 end
 
-% [ALLEEG EEG] = eeg_store(ALLEEG, EEG, CURRENTSET);
-
+% if processing resting state need to rename starting eyes open and eyes closed blocks
+if resting_state
+    % can only epoch to eyes open or eyes closed for resting state
+    if length(epoch_event) > 1
+        error("Choose either 0/1 for epoching resting state EEG")
+    end
+    events = [EEG.event(:).type]';
+    event_trigger = str2double(epoch_event);
+    if event_trigger == 1 % eyes open
+        new_event = 11;
+        epoch_event = {'11'};
+    elseif event_trigger == 0 % eyes closed
+        new_event = 10;
+        epoch_event = {'10'};
+    end
+    block_idx = find(events == event_trigger);
+    first_block = block_idx(1);
+    new_block = block_idx(find(diff(block_idx) > 1) + 1);
+    start_blocks = [first_block; new_block];
+    for idx = start_blocks'
+        EEG.event(idx).type = new_event;
+    end
+    EEG = eeg_checkset(EEG,'eventconsistency');
+end
 
 %% epoching
 % make all EEG.event.type strings
