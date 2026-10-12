@@ -72,7 +72,8 @@ clear i j k
 %% Renaming AS trials (to include score)
 % add path to load AS scores
 addpath('/Volumes/Hera/Projects/7TBrainMech/scripts/eeg/eog_cal/trial_data/anti/') % need to load AS score data table
-ASscore_filename = sprintf("%d_%d.mat",subid,scandate);
+% ASscore_filename = sprintf("%d_%d.mat",subjectID,scandate);
+ASscore_filename = [subjectID '.mat'];
 try
     load(ASscore_filename,'thisdata')
 catch e
@@ -152,6 +153,6 @@ else
 end
 
 % save EEG structure with newly renamed trial types to look back and check that named trials match with actual trial scores
-EEG = pop_saveset( EEG, 'filename',[currentName preprocVer '_Rem.set'],'filepath',char(outputpath));
+EEG = pop_saveset( EEG, 'filename',[currentName '_' preprocVer '_Rem.set'],'filepath',char(outputFolder));
 
 end
