@@ -1,6 +1,6 @@
 function [] = preprocessing_pipeline_V2(inputfile, outpath, lowBP, highBP, overwrite, task, study, eeg_age, ses)
 % sanvi korsapathy 06.05.2026
-% abby beatt
+% abby beatty
 % history of edits: see bottom of file
 % runs from run_preprocessing function, or run_par_preprocessing function 
 
@@ -276,6 +276,10 @@ qc.final_variance = EEG.etc.varAfterICArej;
 removedVar = qc.original_variance-qc.final_variance;
 percentVarRemoved = 100*removedVar/qc.original_variance;
 qc.percent_variance_removed = percentVarRemoved;
+
+% add subject age and session
+qc.eeg_age = EEG.eeg_age;
+qc.session = EEG.session;
 
 % add final rank of the data
 qc.final_rank = rank(EEG.data');

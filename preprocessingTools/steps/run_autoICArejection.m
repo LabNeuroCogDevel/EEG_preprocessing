@@ -17,7 +17,7 @@ EEG = pop_saveset(EEG, 'filename', icawholemarked_name, 'filepath', outpath.Mark
 markedICA_subfolder = [ char(string(subid)) '_' char(string(scandate))];
 markedICA_subpath = fullfile(outpath.MarkedICAwhole, markedICA_subfolder);
 if isfolder(markedICA_subpath)
-    fprintf("%d %d already has marked ICA folder; skipping\n",subid,scandate)
+    fprintf("%d %d already has marked ICA folder\n",subid,scandate)
 else
     mkdir(markedICA_subpath)
 end
@@ -28,7 +28,7 @@ comps2remove = find([EEG.reject.gcompreject] == 1);
 % plot removed components
 icaact_removecomps = eeg_getdatact(EEG, 'component', comps2remove);
 figure
-spectopo(icaact_removecomps,0,EEG.srate,'freqrange',[0.5 70])
+spectopo(icaact_removecomps,0,EEG.srate,'freqrange',[0.5 70]);
 legend(string(comps2remove))
 title(sprintf('SubID: %d, Scan Date: %d', subid,scandate));
 exportgraphics(gcf,fullfile(markedICA_subpath,[icawholemarked_name '_rmcompspec.png']));
