@@ -119,11 +119,9 @@ EEG = pop_jointprob(EEG,1,[1:EEG.nbchan],6,2,0,0,0,[],0);
 
 %save marked epochs (to check later if you agree with the removed opochs)
 EEG = pop_editset(EEG,'setname',[currentName marked_epochname]);
-% [ALLEEG EEG] = eeg_store(ALLEEG, EEG, CURRENTSET);
 
 EEG = pop_saveset( EEG,'filename',[currentName marked_epochname], ...
     'filepath',marked_epoch_folder);
-% [ALLEEG EEG] = eeg_store(ALLEEG, EEG, CURRENTSET);
 
 %reject epochs
 EEG = pop_rejepoch(EEG, find(EEG.reject.rejjp), 0);
@@ -131,7 +129,6 @@ EEG = pop_rejepoch(EEG, find(EEG.reject.rejjp), 0);
 %save epochs rejected EEG data
 %this saves the non-rejected epochs
 EEG = pop_editset(EEG, 'setname', kept_epochname);
-% [ALLEEG EEG] = eeg_store(ALLEEG, EEG, CURRENTSET);
 
 EEG = pop_saveset(EEG, 'filename', kept_epochname, 'filepath',kept_epoch_folder);
-% [ALLEEG EEG] = eeg_store(ALLEEG, EEG, CURRENTSET);
+end
