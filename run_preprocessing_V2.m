@@ -128,53 +128,113 @@ rawEEGs = dir(fullfile(rawdir,'*','*.bdf'));
 % raw EEGs for specific task being preprocessed
 IDX = find(cellfun(@any,regexpi ( {rawEEGs.name}.', task)));
 % set up error cell
-n = length(rawEEGs);
+n = length(IDX);
 errorRemarking = cell(n,2);
 
 % loop over all specific task EEGs
-for idx = IDX'
-    % define current EEG
-    currentName = regexprep(rawEEGs(idx).name,'\.bdf$','');
-    d = [rawEEGs(idx).folder '/'];
-    % skip if already created
-    finalfile = fullfile(paths.remarked, [currentName '_' preprocVer '_Rem.set']);
-    if exist(finalfile,'file') && overwrite == 0
-        fprintf('already have %s\n', finalfile)
-        continue
-    end
-    if dryrun
-        fprintf('want to run %s; set dryrun=0 to actually run\n', finalfile)
-        continue
-    end
-    fprintf('making %s\n',finalfile);
+if strcmp(par_option,'y')
     
-    % load EEG set
-    EEG = pop_biosig([d currentName '.bdf']);
-    EEG.setname=[currentName 'Rem'];
-    
-    try
-        switch task
-            case "rest"
-                remark_resting_state(EEG, currentName, preprocVer, paths.remarked);
-            case "habit"
-                remark_habit_task(EEG, currentName, preprocVer, paths.remarked)
-            case "anti"                
-                if strcmp(study,'7T')
-                    remark_AS_7T(EEG, currentName, preprocVer, paths.remarked);
-                end
+    % start parallel pool
+    if isempty(gcp('nocreate')) % no parallel pool exists
+        parpool(num_workers)
+    elseif ~isempty(gcp('nocreate')) % parallel pool exists
+        p = gcp('nocreate'); % getting parpool object
+        if p.NumWorkers == num_workers % keep exisiting parpool if workers are the same number as workers specified
+            fprintf("Parallel pool already running with specified number of workers\n")
+        else % delete current parpool and create new parpool if current does not match specified number of workers
+            fprintf("Parallel pool running has %d workers; not %d workers specified...\nDeleting and starting new parallel pool with %d workers",...
+                p.NumWorkers, num_workers, num_workers)         
+            delete(gcp('nocreate'))
+            parpool(num_workers)
         end
-    catch e
-        fprintf("Error remarking %s : %s\n",currentName,e.message)
-        errorRemarking{idx,1} = rawEEGs{i};
-        errorRemarking{idx,2} = e.message;
-        for s=e.stack
-            disp(s)
+        
+    end
+    
+    parfor idxIDX = 1:length(IDX)
+        idx = IDX(idxIDX);
+        % define current EEG
+        currentName = regexprep(rawEEGs(idx).name,'\.bdf$','');
+        d = [rawEEGs(idx).folder '/'];
+        % skip if already created
+        finalfile = fullfile(paths.remarked, [currentName '_' preprocVer '_Rem.set']);
+        if exist(finalfile,'file') && overwrite == 0
+            fprintf('already have %s\n', finalfile)
+            continue
+        end
+        if dryrun
+            fprintf('want to run %s; set dryrun=0 to actually run\n', finalfile)
+            continue
+        end
+        fprintf('making %s\n',finalfile);
+
+        % load EEG set
+        EEG = pop_biosig([d currentName '.bdf']);
+        EEG.setname=[currentName 'Rem'];
+
+        try
+            switch task
+                case "rest"
+                    remark_resting_state(EEG, currentName, preprocVer, paths.remarked);
+                case "habit"
+                    remark_habit_task(EEG, currentName, preprocVer, paths.remarked)
+                case "anti"                
+                    if strcmp(study,'7T')
+                        remark_AS_7T(EEG, currentName, preprocVer, paths.remarked);
+                    end
+                case "vgs"
+                    remark_vgs(EEG,currentName,preprocVer, paths.remarked);
+            end
+        catch e
+            fprintf("Error remarking %s : %s\n",currentName,e.message)
+            errorRemarking(idxIDX,:) = {rawEEGs(idx).name, e.message};
+        end
+    end
+    
+elseif strcmp(par_option,'n')
+    for idxIDX = 1:length(IDX)
+        idx = IDX(idxIDX);
+        % define current EEG
+        currentName = regexprep(rawEEGs(idx).name,'\.bdf$','');
+        d = [rawEEGs(idx).folder '/'];
+        % skip if already created
+        finalfile = fullfile(paths.remarked, [currentName '_' preprocVer '_Rem.set']);
+        if exist(finalfile,'file') && overwrite == 0
+            fprintf('already have %s\n', finalfile)
+            continue
+        end
+        if dryrun
+            fprintf('want to run %s; set dryrun=0 to actually run\n', finalfile)
+            continue
+        end
+        fprintf('making %s\n',finalfile);
+
+        % load EEG set
+        EEG = pop_biosig([d currentName '.bdf']);
+        EEG.setname=[currentName 'Rem'];
+
+        try
+            switch task
+                case "rest"
+                    remark_resting_state(EEG, currentName, preprocVer, paths.remarked);
+                case "habit"
+                    remark_habit_task(EEG, currentName, preprocVer, paths.remarked)
+                case "anti"                
+                    if strcmp(study,'7T')
+                        remark_AS_7T(EEG, currentName, preprocVer, paths.remarked);
+                    end
+                case "vgs"
+                    remark_vgs(EEG,currentName,preprocVer, paths.remarked);
+            end
+        catch e
+            fprintf("Error remarking %s : %s\n",currentName,e.message)
+            errorRemarking(idxIDX,:) = {rawEEGs(idx).name, e.message};
         end
     end
 end
 
 errorRemarking = errorRemarking(~cellfun(@isempty,errorRemarking(:,1)),:);
 allErrors.remarking = errorRemarking;
+
 %% gather all file paths for subjects remarked data
 setfilesDir = [paths.remarked, '/*.set'];
 remarked_files = all_remarked_set(setfilesDir);
@@ -194,28 +254,44 @@ end
 %% loop through every subject to preprocess
 % saving input files that failed to be preprocessed
 errorProcessing = cell(n,2);
-errorAddingAge = cell(n,2);
 if strcmp(par_option,'y')
-    delete(gcp('nocreate')) % clear any existing parpool
-    parpool(num_workers);
+    
+    % start parallel pool
+    if isempty(gcp('nocreate')) % no parallel pool exists
+        parpool(num_workers)
+    elseif ~isempty(gcp('nocreate')) % parallel pool exists
+        p = gcp('nocreate'); % getting parpool object
+        if p.NumWorkers == num_workers % keep exisiting parpool if workers are the same number as workers specified
+            fprintf("Parallel pool already running with specified number of workers\n")
+        else % delete current parpool and create new parpool if current does not match specified number of workers
+            fprintf("Parallel pool running has %d workers; not %d workers specified...\nDeleting and starting new parallel pool with %d workers",...
+                p.NumWorkers, num_workers, num_workers)         
+            delete(gcp('nocreate'))
+            parpool(num_workers)
+        end        
+    end
+    
     parfor j = 1:n
+        % get lunaid and eeg date
         inputfile = remarked_files{j};
         splitfilename = split(inputfile,"/");
         filename = splitfilename{end};
         splitname = split(filename,"_");
         lunaid = str2double(splitname{1});
         scandate = str2double(splitname{2});
-        eeg_age = [];
-        ses = [];
+        % find age from demo info
         subidx = find(age_df.lunaid == lunaid & age_df.eeg_date == scandate);
-        try 
-            subtable = age_df(subidx,:);
-            eeg_age = subtable.eeg_age;
-            ses = subtable.ses;
-        catch e
-            fprintf('Error adding age "%s": %s\n',inputfile, e.message)
-            errorAddingAge(j,:) = {remarked_files{j}, e.message};
+        
+        % set age to NA if unable to find a match
+        if isempty(subidx)
+            eeg_age = NaN;
+            ses = NaN;
+            warning("No age found for %d %d!!!",lunaid,scandate)
+        else
+            eeg_age = age_df(subidx,:).eeg_age;
+            ses = age_df(subidx,:).ses;
         end
+       
         try
             preprocessing_pipeline_V2(remarked_files{j},paths,lowBP,highBP,overwrite,task,study,eeg_age,ses)
         catch e
@@ -230,23 +306,27 @@ elseif strcmp(par_option,'n')
     
     for j = 1:n
         inputfile = remarked_files{j};
-        % updating waitbar
+        % get lunaid and eeg_date
         waitbar_filename = split(inputfile,"/");
         waitbar_name = waitbar_filename{end};
         split_name = split(waitbar_name,"_");
-        lunaid = split_name{1};
-        scandate = split_name{2};
-        eeg_age = [];
-        ses=[];
-        waitbar(j/n,w,sprintf("%s %s",lunaid,scandate))
-        try 
-            subtable = age_df(subidx,:);
-            eeg_age = subtable.eeg_age;
-            ses = subtable.ses;
-        catch e
-            fprintf('Error adding age "%s": %s\n',inputfile, e.message)
-            errorAddingAge(j,:) = {remarked_files{j}, e.message};
+        lunaid = str2double(split_name{1});
+        scandate = str2double(split_name{2});
+        % update waitbar
+        waitbar(j/n,w,sprintf("%d %d",lunaid,scandate))
+        subidx = find(age_df.lunaid == lunaid & age_df.eeg_date == scandate);
+        
+        % set age to NA if unable to find a match
+        if isempty(subidx)
+            eeg_age = NaN;
+            ses = NaN;
+            warning("No age found for %d %d!!!",lunaid,scandate)
+        else
+            eeg_age = age_df(subidx,:).eeg_age;
+            ses = age_df(subidx,:).ses;
         end
+     
+        % try to run preproc pipeline
         try
             preprocessing_pipeline_V2(inputfile,paths,lowBP,highBP,overwrite,task,study,eeg_age,ses)
         catch e
@@ -259,8 +339,7 @@ elseif strcmp(par_option,'n')
 end
 errorProcessing = errorProcessing(~cellfun(@isempty,errorProcessing(:,1)),:);
 allErrors.processing = errorProcessing;
-errorAddingAge = errorAddingAge(~cellfun(@isempty,errorAddingAge(:,1)),:);
-allErrors.addingage = errorAddingAge;
+
 %% clean epochs and remove ones that are bad
 if strcmp(study,'7T')
     cleanICA_path = paths.ICAwholeclean_homogenize;
@@ -279,37 +358,39 @@ elseif strcmp(study,'Habit') || strcmp(study,'SPA')
 end
 
 n = size(EEGfileNames,1);
-errorEpoch = cell(n,2);
 
-% view_events_eeg = pop_loadset(fullfile(cleanICA_path, EEGfileNames(1).name));
-% disp({view_events_eeg.event.type});
+errorEpoch = cell(n,2); % preallocate error array
 
-revisar = {};
-if task ~= "resting_state"
-    event_marker = input(sprintf('Select event(s) to epoch around for %s (comma-separated): ', task),'s');
-    event_marker = strtrim(split(event_marker, ','));
-    event_marker = cellstr(event_marker);
-    
-    while true
-        epochTimes = input('Enter epoch limits (e.g. [-2 1]): ');
-        if isnumeric(epochTimes) && numel(epochTimes) == 2 && epochTimes(1) < epochTimes(2)
-            break;
-        end
-        fprintf('Invalid input. Please enter a vector like [-2 1].\n');
+% view all events to potentially epoch to
+view_events_eeg = pop_loadset(fullfile(cleanICA_path, EEGfileNames(1).name));
+disp({view_events_eeg.event.type});
+
+% user input to events to epoch to
+epoch_event = input(sprintf("Select event(s) to epoch around for %s (comma-separated): ",task),'s');
+epoch_event = strtrim(split(epoch_event,','));
+% event_trigger = string(strtrim(split(event_trigger, ',')));
+
+% user input to get epoch times
+while true
+    epoch_times = input('Enter epoch limits in seconds (e.g. [-2 1]): ');
+    if isnumeric(epoch_times) && numel(epoch_times) == 2 && epoch_times(1) < epoch_times(2)
+        break;
     end
-    
-    for currentEEG=1:n
-        filename=[EEGfileNames(currentEEG).name];
-        inputfile = fullfile(cleanICA_path,filename);
-        try
-            revisar{currentEEG} = epochclean(inputfile,epoch_folder,marked_epoch_folder,...
-                kept_epoch_folder,event_marker,epochTimes);
-        catch e
-            fprintf('Error processing "%s": %s\n',inputfile, e.message)
-            errorEpoch{currentEEG,1} = EEGfileNames(currentEEG).name;
-            errorEpoch{currentEEG,2} = e.message;
-        end
+    fprintf('Invalid input. Please enter a vector like [-2 1].\n');
+end
+
+% loop over each EEG and run epochclean
+for j = 1:n
+    filename=[EEGfileNames(j).name];
+    input_file = fullfile(cleanICA_path,filename);
+    try
+        epochclean(input_file,epoch_folder, marked_epoch_folder,...
+            kept_epoch_folder,overwrite, epoch_event, epoch_times)
+    catch e
+        errorEpoch{j,1} = EEGfileNames(j).name;
+        errorEpoch{j,2} = e.message;
     end
+
 end
 
 errorEpoch = errorEpoch(~cellfun(@isempty,errorEpoch(:,1)),:);
@@ -317,25 +398,25 @@ allErrors.epoch = errorEpoch;
 
 %% for anti-saccade add trial score to EEG.event of epoched data
 
-if task == "anti"
-    renamed_files = dir(fullfile(paths.renamedtrials ,'*.set'));
-    epoch_files = dir(fullfile(paths.kept_epoch,'*kept_2.set'));
-    
-    n = size(epoch_files,1);
-    errorScore = cell(n,2);
-
-    for currentepochEEG = 1:n
-        try
-            anti_trial_scoring
-        catch e
-            fprintf('Error adding score "%s": %s\n',epochfilename, e.message)
-            errorScore{currentepochEEG,1} = epoch_files(currentepochEEG).name;
-            errorScore{currentepochEEG,2} = e.message;
-        end
-    end
-    errorScore = errorScore(~cellfun(@isempty,errorScore(:,1)),:);
-    allErrors.score = errorScore;
-end
+% if task == "anti"
+%     renamed_files = dir(fullfile(paths.renamedtrials ,'*.set'));
+%     epoch_files = dir(fullfile(paths.kept_epoch,'*kept_2.set'));
+%     
+%     n = size(epoch_files,1);
+%     errorScore = cell(n,2);
+% 
+%     for currentepochEEG = 1:n
+%         try
+%             anti_trial_scoring
+%         catch e
+%             fprintf('Error adding score "%s": %s\n',epochfilename, e.message)
+%             errorScore{currentepochEEG,1} = epoch_files(currentepochEEG).name;
+%             errorScore{currentepochEEG,2} = e.message;
+%         end
+%     end
+%     errorScore = errorScore(~cellfun(@isempty,errorScore(:,1)),:);
+%     allErrors.score = errorScore;
+% end
 
 %% create report with data from all QC files
 % if task == "resting_state"
@@ -350,31 +431,40 @@ end
 %     QCfiles = dir(fullfile(paths.qualityCheck, '*.mat'));
 % end
 
-task_label = task;
 QCfiles = dir(fullfile(paths.qualityCheck, '*.mat'));
 nFiles = length(QCfiles);
 
 masterQC = table(zeros(nFiles,1),zeros(nFiles,1), zeros(nFiles,1), zeros(nFiles,1),...
-    zeros(nFiles,1), zeros(nFiles,1), zeros(nFiles,1), zeros(nFiles,1),...
-    'VariableNames', {'subid','scandate','num_ICs_rej','num_chans_rej',...
-    'original_var', 'percent_var_removed', ...
+    zeros(nFiles,1), zeros(nFiles,1), zeros(nFiles,1),...
+    zeros(nFiles,1), zeros(nFiles,1), zeros(nFiles,1), zeros(nFiles,1),zeros(nFiles,1),zeros(nFiles,1),...
+    'VariableNames', {'subid','scandate','eeg_age','session','num_ICs_rej','num_chans_rej',...
+    'sec_data_rej','percent_data_rej',...
+    'original_var','final_var', 'percent_var_removed', ...
     'final_rank', 'rank_percent'});
 
 for i = 1:nFiles
     
     data = load(fullfile(QCfiles(i).folder, QCfiles(i).name));
-    loadQC = data.data;
+    loadQC = data.qc;
     
     masterQC.subid(i) = loadQC.subid;
     masterQC.scandate(i) = loadQC.scandate;
+    masterQC.eeg_age(i) = loadQC.eeg_age;
+    masterQC.session(i) = loadQC.session;
+    % ICs and channles rejected
     masterQC.num_ICs_rej(i) = loadQC.num_ICs_reject;
-    masterQC.num_chans_rej(i) = loadQC.num_removed_channels;
+    masterQC.num_chans_rej(i) = loadQC.num_removed_chans;
+    % data rejected
+    masterQC.sec_data_rej(i) = loadQC.removed_data; % seconds of removed data
+    masterQC.percent_data_rej(i) = loadQC.num_removed_data; % percent of data removed
+    % Variance from ICA
     masterQC.original_var(i) = loadQC.original_variance;
+    masterQC.final_var(i) = loadQC.final_variance;
     masterQC.percent_var_removed(i) = loadQC.percent_variance_removed;
     masterQC.final_rank(i) = loadQC.final_rank;
     masterQC.rank_percent(i) = 100*(loadQC.final_rank/64);
 end
 
-save(fullfile(paths.main, [task_label '_masterQualityCheck.mat']),'masterQC')
+save(fullfile(paths.main, [task '_masterQualityCheck.mat']),'masterQC')
 
 end
