@@ -17,7 +17,7 @@ EEG.subject = subid;
 EEG.scandate = scandate;
 EEG.task = task_type;
 
-%% Filtering
+%% Bandpass filtering
 EEG = pop_eegfiltnew(EEG, lowBP, highBP, 3380, 0, [], 0);
 % inputs: (EEG, locutoff, hicutoff, filtorder, revfilt, usefft, plotfreqz, minphase);
 % revfilt- reverse filter 0=bandpass, 1=notch
@@ -28,7 +28,13 @@ EEG = pop_eegfiltnew(EEG, lowBP, highBP, 3380, 0, [], 0);
 % give a new setname and overwrite unfiltered data
 EEG = pop_editset(EEG,'setname',[currentName '_bandpass_filtered']);
 
+%% Notch filtering
+EEG = pop_eegfiltnew(EEG, 59, 61, [], 1, [], 0);
+EEG = pop_editset(EEG,'setname',[currentName '_linenoise_filtered']);
+
 %% Resample Data
+% TO DO: downsample after filtering line noise to be safe (add line noise
+% filter to this step)
 % Downsample the data to 512 Hz using anti-aliasing filter if raw data was collected at a higher sampling frequency
 if EEG.srate > 512
     EEG = pop_resample(EEG, 512, 0.8, 0.4);

@@ -44,15 +44,15 @@ else % less than 100 channels
         EEG = pop_select( EEG,'nochannel',{'EX3' 'EX4' 'EX5' 'EX6' 'EX7' 'EX8' 'EXG1' 'EXG2' 'EXG3' 'EXG4' 'EXG5' 'EXG6' 'EXG7' 'EXG8'});
     
     elseif strcmp(study,'Habit') && (scandate <= 20260129)
-        %% Habit before new B band (20260129) and before new config file (20261012)
+        %% Habit before new B band (20260129) and before new config file (20261015)
         % Matches old 7T -> just need to remove external channels
         EEG = pop_chanedit(EEG, 'lookup', cap_location);
        
         % remove external channels
         EEG = pop_select( EEG,'nochannel',{'EX3' 'EX4' 'EX5' 'EX6' 'EX7' 'EX8' 'EXG1' 'EXG2' 'EXG3' 'EXG4' 'EXG5' 'EXG6' 'EXG7' 'EXG8'});
         
-    elseif strcmp(study,'Habit') && (scandate > 20260129) && (scandate < 20261012)
-        %% Habit after new B band (20260129) and before new config file (20261012)
+    elseif strcmp(study,'Habit') && (scandate > 20260129) && (scandate < 20261015)
+        %% Habit after new B band (20260129) and before new config file (20261015)
         % New B band does not have PO10 electrode lead
         % New B band has TP8 lead instead; TP8 lead plugged into TP8 on cap
         % In config file TP8 still labeled as PO10
@@ -69,8 +69,8 @@ else % less than 100 channels
         % remove external channels
         EEG = pop_select( EEG,'nochannel',{'EX3' 'EX4' 'EX5' 'EX6' 'EX7' 'EX8' 'EXG1' 'EXG2' 'EXG3' 'EXG4' 'EXG5' 'EXG6' 'EXG7' 'EXG8'});
         
-    elseif strcmp(study,'Habit') && (scandate > 20260129) && (scandate >= 20261012)
-        %% Habit after new B band (20260129) and after new config file (20261012)
+    elseif strcmp(study,'Habit') && (scandate > 20260129) && (scandate >= 20261015)
+        %% Habit after new B band (20260129) and after new config file (20261015)
         % New B band does not have PO10 electrode lead
         % New B band has TP8 lead instead; TP8 lead plugged into TP8 on cap
         % In new config file TP8 is labels -> do not need to change EEG.chanlocs.label
@@ -95,7 +95,7 @@ else % less than 100 channels
         EEG = pop_select( EEG,'nochannel',{'EX3' 'EX4' 'EX5' 'EX6' 'EX7' 'EX8' 'EXG1' 'EXG2' 'EXG3' 'EXG4' 'EXG5' 'EXG6' 'EXG7' 'EXG8'});
                 
     
-    elseif strcmp(study,'SPA') && (scandate <= 20260129)
+    elseif strcmp(study,'SPA') && (scandate <= 20261015)
         %% SPA before new B band and before new config file      
         channel_labels = string({EEG.chanlocs(:).labels})';
         
@@ -147,8 +147,8 @@ else % less than 100 channels
         
         EEG = pop_interp(EEG, missing_chans, "spherical");   
         
-    elseif  strcmp(study,'SPA') && (scandate > 20260129) && (scandate < 20261012)
-        %% SPA after new B band (20260129) and before new config file (20261012)     
+    elseif  strcmp(study,'SPA') && (scandate > 20260129) && (scandate < 20261015)
+        %% SPA after new B band (20260129) and before new config file (20261015)     
         channel_labels = string({EEG.chanlocs(:).labels})';
         
         % Mislabeled channels:
@@ -194,10 +194,10 @@ else % less than 100 channels
         % remove external channels
         EEG = pop_select( EEG,'nochannel',{'EX3' 'EX4' 'EX5' 'EX6' 'EX7' 'EX8' 'EXG1' 'EXG2' 'EXG3' 'EXG4' 'EXG5' 'EXG6' 'EXG7' 'EXG8'});
         
-        % interpolate 2 channels not being recorded from
+        % interpolate 2 channels not being recorded from (locations TP7 and FPz)
         missing_chans = [I1_label_idx PO9_label_idx];
+        EEG = pop_interp(EEG, missing_chans, "spherical");
         
-        EEG = pop_interp(EEG, missing_chans, "spherical");   
     elseif strcmp(study,'SPA') && (scandate > 20260129) && (scandate >= 20261012)
         %% SPA after new B band (20260129) and after new config file (20261012) 
         % No changing labels need -> locations should match config file
