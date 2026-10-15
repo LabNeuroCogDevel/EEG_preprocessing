@@ -48,8 +48,6 @@ figure
 plot(EEG.times./1000,EEG.data,'color','k')
 hold on
 
-% Save specific component number removed
-
 % remove marked components
 EEG = pop_subcomp(EEG, [], 0);
 
