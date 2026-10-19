@@ -3,12 +3,18 @@ EEG = pop_loadset(WholeICAFile);
 % add IC labels (even though doing manual rejection)
 EEG = pop_iclabel(EEG, 'default');
 
-% EEG = pop_selectcomps(EEG, 1:size(EEG.icaweights,1));
-EEG = pop_selectcomps(EEG, 1:2);
+% to reject ICs in GUI need to make sure the base workspace has THIS subject's EEG
+assignin('base','EEG',EEG)
+
+pop_selectcomps(EEG, 1:size(EEG.icaweights,1));
 pop_eegplot(EEG,0,1,1);
 
 % add breakpoint before saving marked ICs to reject
+% mark components in the GUI, click "Accept" (or close) then type "return" in command window
 keyboard;
+
+% pull in the GUI's updated flags back into the local EEG
+EEG = evalin('base','EEG');
 
 % save flagged components in one file
 EEG = pop_saveset(EEG, 'filename', icawholemarked_name, 'filepath', outpath.MarkedICAwhole);
@@ -25,6 +31,7 @@ end
 
 % find components marked for rejection
 comps2remove = find([EEG.reject.gcompreject] == 1);
+fprintf('Removing %d components: %s\n', numel(comps2remove), mat2str(comps2remove));
 
 % plot removed components
 icaact_removecomps = eeg_getdatact(EEG, 'component', comps2remove);
