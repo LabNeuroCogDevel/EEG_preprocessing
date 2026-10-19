@@ -46,9 +46,7 @@ fprintf('==========\n%d %d:\n\t Initial Preprocessing(%.1f,%.1f,%s)\n',...
 % filenames
 filter_name = [currentName '_filtered'];
 chrm_name   = [currentName '_badchannelrj'];
-datarm_name = [currentName '_baddatarj'];
 interp_name = [currentName '_interp'];
-linenoise_name = [currentName '_removeLineNoise'];
 rerefwhole_name = [currentName '_rerefwhole'];
 runICA_name = [currentName '_runICA'];
 icawholeout_name = [currentName '_ICAwhole'];
@@ -57,9 +55,7 @@ icawholeclean_name = [currentName '_CleanICA'];
 homogenize_name = [currentName '_CleanICA_Homogenize'];
 
 % file names to check for existing files
-icawholeoutFile = fullfile(outpath.ICAwholeclean_homogenize, [homogenize_name '.set']);
 filteredFile = fullfile(outpath.filtered, [filter_name '.set']);
-lineNoisefile = fullfile(outpath.removeLineNoise, [linenoise_name '.set']);
 chanrjfile = fullfile(outpath.channels_rejected, [chrm_name '.set']);
 interpfile = fullfile(outpath.interpolated, [interp_name '.set']);
 rerefFile = fullfile(outpath.rerefwhole, [rerefwhole_name '.set']);
@@ -67,7 +63,9 @@ runICAFile = fullfile(outpath.runICA, [runICA_name '.set']);
 WholeICAFile = fullfile(outpath.ICAwhole, [icawholeout_name '.set']);
 MarkedICAFile = fullfile(outpath.MarkedICAwhole, [icawholemarked_name '.set']);
 CleanICAFile = fullfile(outpath.ICAwholeclean, [icawholeclean_name '.set']);
-HomogenizedFile = fullfile(outpath.ICAwholeclean_homogenize, [homogenize_name '.set']);
+if strcmpi(study,'7T')
+    HomogenizedFile = fullfile(outpath.ICAwholeclean_homogenize, [homogenize_name '.set']);
+end
 QC_file = fullfile(outpath.qualityCheck, [currentName '_QC.mat']);
 
 %% channel names
@@ -271,11 +269,11 @@ else
     if FLAG_manualICrej % flagged for manual IC rejection
         if isempty(step) % if step is not specified and rejected ICA EEG does not exist run run_autoICArejection
             overwrite = 1; % since new file is created, rerun preproc on new file
-            run_autoICArejection
+            run_manualICArejection
 
         elseif step == 7 % if step is specified and it is set to 7 (ICA rejection step) run run_autoICArejection
             overwrite = 1;
-            run_autoICArejection
+            run_manualICArejection
             step = []; % set step to empty to continue preproc as usual for following steps
 
         elseif step ~= 7 % if step is specified but it is not set to 7 (ICA rejection step) load ICA rejected EEG and continue to next step
@@ -301,7 +299,7 @@ else
 end
 
 
-%% Homogenize Chanloc
+%% 7b. Homogenize Chanloc
 
 if strcmp(study,'7T')
     if overwrite == 0 && exist(HomogenizedFile, 'file')
@@ -329,7 +327,7 @@ if strcmp(study,'7T')
     end
 end
 
-%% Create QC figure (spectrum of each channel)
+%% 8a. Create QC figure (spectrum of each channel)
 if overwrite == 1 || step == 8 % if reran all preproc (or did initial run) OR if specified step 8 (QC fig) generate QC fig
     figure;
     spectopo(EEG.data,0,EEG.srate, 'freqrange', [2 70]);
@@ -338,7 +336,7 @@ if overwrite == 1 || step == 8 % if reran all preproc (or did initial run) OR if
     close all;
 end
 
-%% Create QC file
+%% 8b. Create QC file
 qc = struct();
 
 % general information
