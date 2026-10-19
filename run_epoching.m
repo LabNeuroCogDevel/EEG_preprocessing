@@ -28,6 +28,7 @@ end
 fprintf('\n===== EPOCHING SETTINGS =====\n');
 fprintf('Task                   : %s\n', task);
 fprintf('Preprocessed directory : %s\n', maindir);
+fprintf('Task directory         : %s\n',fullfile(maindir,task));
 fprintf('==================================\n');
 
 reply = input('Proceed? (y/n): ','s');
@@ -53,7 +54,7 @@ else
 end
 
 % create outpaths, create subfolders if they don't exist
-paths = create_output_paths(maindir, task,study);
+paths = create_output_paths(maindir, task, study);
 
 %% clean epochs and remove ones that are bad
 if strcmp(study,'7T')

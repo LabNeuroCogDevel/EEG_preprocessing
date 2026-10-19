@@ -75,6 +75,7 @@ end
 fprintf('\n===== PREPROCESSING SETTINGS =====\n');
 fprintf('Task                   : %s\n', task);
 fprintf('Preprocessed directory : %s\n', maindir);
+fprintf('Task directory         : %s\n',fullfile(maindir,task));
 fprintf('Raw files directory    : %s\n', rawdir);
 fprintf('==================================\n');
 
