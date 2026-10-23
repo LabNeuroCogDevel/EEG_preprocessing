@@ -19,11 +19,15 @@ end
 
 mark = [EEG.event(:).type];
 markmin = min(mark);
-if markmin ~= 16128
-    error("Cannot remark; min mark prior to remarking is not 16128")
-else
+if markmin == 16128
+    fprintf("Min mark is 16128\n")
+elseif markmin == 16129
+    warning("Adding 1 to each mark after making photodiode vector")
     % use photodiode to get simple marks
     [micromed_time, mark] = make_photodiodevector(EEG);
+    mark = mark+1;
+else
+    error("min mark is not 16128 or 16129")
 end
 
 % change timing to photodiodes then remove photodiode events
@@ -121,7 +125,7 @@ if length(check_trials) < 216
     error('Did not correctly add trial number to event field')
 else
     EEG.num_trials = num_trials;
-    EEG = pop_saveset( EEG, 'filename',[currentName '_' preprocVer '_Rem.set'],'filepath',char(outputpath));
+    EEG = pop_saveset( EEG, 'filename',[currentName '_' preprocVer '_Rem.set'],'filepath',char(outputFolder));
 end
 
 end
