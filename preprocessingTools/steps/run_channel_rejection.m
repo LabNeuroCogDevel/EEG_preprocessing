@@ -19,17 +19,17 @@ elseif strcmp(study,'SPA')
     % convert current scandate to datetime variable that matches eeg_comments table      
     scandate_DATE = datetime(scandate,'ConvertFrom','yyyymmdd');
     scandate_DATE.Format = 'yyyy-MM-dd';
-    % find if scandate and lunaid matches any row of eeg_comments
-    match_idx = find(eeg_comments.record_id == lunaid & eeg_comments.eegscandate == scandate_DATE);
+    % find if scandate and subid matches any row of eeg_comments
+    match_idx = find(eeg_comments.record_id == subid & eeg_comments.eegscandate == scandate_DATE);
     if isempty(match_idx)
-        fprintf("No eeg comments for %d %d\n",lunaid,scandate)
+        fprintf("No eeg comments for %d %d\n",subid,scandate)
     else
         % get specific comments for current subject
         sub_comment = string(eeg_comments.eeg_comments(match_idx));
         % was Habit cap used?
         spastudy_habitcap = contains(sub_comment,'habit cap','IgnoreCase',true);
         if spastudy_habitcap
-            warning("Habit cap used for %d %d\nChanging preproc to Habit for channel rejection step\n",lunaid,scandate)
+            warning("Habit cap used for %d %d\nChanging preproc to Habit for channel rejection step\n",subid,scandate)
             study = 'Habit';
         end
     end
@@ -54,9 +54,9 @@ else % less than 100 channels
         % remove external channels
         EEG = pop_select( EEG,'nochannel',{'EX3' 'EX4' 'EX5' 'EX6' 'EX7' 'EX8' 'EXG1' 'EXG2' 'EXG3' 'EXG4' 'EXG5' 'EXG6' 'EXG7' 'EXG8'});
     
-    elseif strcmp(study,'Habit') && (scandate <= 20260129)
+    elseif strcmp(study,'Habit') 
         %% Habit
-        if scanddate <= newbband_date
+        if scandate <= newbband_date
             %% Before new B band
             % Matches old 7T => just need to remove external channels
             EEG = pop_chanedit(EEG, 'lookup', cap_location);
@@ -141,9 +141,9 @@ else % less than 100 channels
 
             % Not recording data from:
             %   I1 lead (I1 in config file)  (to be plugged into TP7 with new config file)
-            %   PO9 lead (PO9 in config file) (to be plugged into FP7 with new config file)
+            %   PO9 lead (PO9 in config file) (to be plugged into FPz with new config file)
             %   TP8 lead (PO10 in config file) (to be plugged into TP8 with new B band)        
-            % ^^ Cap locations TP7, FP7, and TP8 are empty
+            % => Cap locations TP7, FPz, and TP8 are empty
             I1_label_idx = find(channel_labels == "I1");
             EEG.chanlocs(I1_label_idx).labels = 'TP7';
 
@@ -163,6 +163,9 @@ else % less than 100 channels
             missing_chans = [I1_label_idx PO9_label_idx PO10_label_idx];
 
             EEG = pop_interp(EEG, missing_chans, "spherical");   
+            
+            % track what was done
+            EEG.chan_info = "before new b-band: interpolated TP7, FPz, and TP8 and fixed channel labels";
             
         elseif (scandate > newbband_date) && (scandate < allleadsused_date)
             %% After new B band but not recording from I1 and PO9
@@ -196,8 +199,8 @@ else % less than 100 channels
 
             % Not recording data from:
             %   I1 lead (I1 in config file)  (to be plugged into TP7 with new config file)
-            %   PO9 lead (PO9 in config file) (to be plugged into FP7 with new config file)  
-            % ^^ Cap locations TP7 and FP7 are empty
+            %   PO9 lead (PO9 in config file) (to be plugged into FPz with new config file)  
+            % ^^ Cap locations TP7 and FPz are empty
 
             I1_label_idx = find(channel_labels == "I1");
             EEG.chanlocs(I1_label_idx).labels = 'TP7';
@@ -214,6 +217,9 @@ else % less than 100 channels
             % interpolate 2 channels not being recorded from (locations TP7 and FPz)
             missing_chans = [I1_label_idx PO9_label_idx];
             EEG = pop_interp(EEG, missing_chans, "spherical");
+            
+            % track what was done
+            EEG.chan_info = "after new b-band, before we started recording from TP7 and FPz: interpolated TP7 and FPz and fixed channel labels";
             
         elseif (scandate > newbband_date) && (scandate >= allleadsused_date) && (scandate < newconfigfiles_date)
             %% After new B band and recording from I1 and PO9 but not using new config file
@@ -245,10 +251,10 @@ else % less than 100 channels
             PO10_label_idx = find(channel_labels == "PO10");
             EEG.chanlocs(PO10_label_idx).labels = 'TP8';
 
-            % Not recording data from:
+            % Recording data from but mislabeled:
             %   I1 lead (I1 in config file)  (to be plugged into TP7 with new config file)
-            %   PO9 lead (PO9 in config file) (to be plugged into FP7 with new config file)  
-            % ^^ Cap locations TP7 and FP7 are empty
+            %   PO9 lead (PO9 in config file) (to be plugged into FPz with new config file)  
+            % ^^ Cap locations TP7 and FPz are not empty but leads are mislabled on config file
 
             I1_label_idx = find(channel_labels == "I1");
             EEG.chanlocs(I1_label_idx).labels = 'TP7';
@@ -261,10 +267,9 @@ else % less than 100 channels
 
             % remove external channels
             EEG = pop_select( EEG,'nochannel',{'EX3' 'EX4' 'EX5' 'EX6' 'EX7' 'EX8' 'EXG1' 'EXG2' 'EXG3' 'EXG4' 'EXG5' 'EXG6' 'EXG7' 'EXG8'});
-
-            % interpolate 2 channels not being recorded from (locations TP7 and FPz)
-            missing_chans = [I1_label_idx PO9_label_idx];
-            EEG = pop_interp(EEG, missing_chans, "spherical");
+            
+            % track what was done
+            EEG.chan_info = "after new b-band, after we started recording from TP7 and FPz, before new config file: fixed channel labels";
             
         elseif (scandate > newbband_date) && (scandate >= allleadsused_date) && (scandate >= newconfigfiles_date)
             %% After new B band and recording from I1 and PO9 using new config file
@@ -287,7 +292,9 @@ else % less than 100 channels
 
             % remove external channels
             EEG = pop_select( EEG,'nochannel',{'EX3' 'EX4' 'EX5' 'EX6' 'EX7' 'EX8' 'EXG1' 'EXG2' 'EXG3' 'EXG4' 'EXG5' 'EXG6' 'EXG7' 'EXG8'});
-        
+            
+            % track what was done
+            EEG.chan_info = "after new b-band, after we started recording from TP7 and FPz, after new config file: no fixes needed";
         end
     end
 end
@@ -327,13 +334,12 @@ EEG.channels_rj = channels_removed{2};
 EEG.channels_rj_nr = length(EEG.channels_rj);
 
 %save the proportion of the dataset that were rejected in a variable
-data_removed{1} = datarm_name; %setname
-data_removed{2} = length(find(EEG.etc.clean_sample_mask==0))/EEG.srate;% seconds of removed data
-data_removed{3} = length(find(EEG.etc.clean_sample_mask==0))/length(EEG.etc.clean_sample_mask);% percent data removed
+data_removed{1} = length(find(EEG.etc.clean_sample_mask==0))/EEG.srate;% seconds of removed data
+data_removed{2} = length(find(EEG.etc.clean_sample_mask==0))/length(EEG.etc.clean_sample_mask);% percent data removed
 
 %also save the data that were rejected in the EEG struct
-EEG.data_rj    = data_removed{2};
-EEG.data_rj_nr = data_removed{3};
+EEG.data_rj    = data_removed{1};
+EEG.data_rj_nr = data_removed{2};
 
 % In channels_rj folder create new subject folder to save figures for QC
 channelsrj_subfolder = [ char(string(subid)) '_' char(string(scandate))];
@@ -356,7 +362,7 @@ end
 
 % if changed to Habit because wrong cap was used switch study back to SPA
 if spastudy_habitcap
-   fprintf("Ran channel rejection for %d %d using habit cap\nSwitching study back to SPA",lunaid,scandate)
+   fprintf("Ran channel rejection for %d %d using habit cap\nSwitching study back to SPA\n",subid,scandate)
    study = 'SPA';
 end
 

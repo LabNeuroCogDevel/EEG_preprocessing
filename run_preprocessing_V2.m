@@ -86,9 +86,11 @@ if ~strcmpi(reply,'y')
 end
 
 % load in paths to fieldtrip and eeglab
-addpath('/Volumes/Hera/Projects/7TBrainMech/scripts/fieldtrip-20180926/')
+
+addpath('/Volumes/Hera/EEG_toolkit/Resources/fieldtrip-20260715/')
 addpath(genpath('/Volumes/Hera/EEG_toolkit/preprocessingTools'))
-run('/Volumes/Hera/EEG_toolkit/Resources/eeglab_current/eeglab2024.2/eeglab.m')
+addpath('/Volumes/Hera/EEG_toolkit/Resources/eeglab_current/eeglab2024.2/')
+eeglab('nogui')
 
 % Print task and preproc version
 msg = "I am running " + task + " with preprocessing pipeline version " + preprocVer;
@@ -117,6 +119,8 @@ elseif strcmp(study,'Habit')
     age_df = readtable('/Volumes/Hera/Projects/Habit/redcap/data/eeg_mr_vdate.csv');
     age_df.eeg_date = age_df.eeg;
 elseif strcmp(study,'SPA')
+    age_df.lunaid = [];
+    age_df.eeg_date = [];
     % TODO!!! add SPA ages
 end
 
@@ -140,9 +144,9 @@ elseif strcmp(runRemarking_reply,'y') % run remarking
             worker_text = 'Enter number of workers to use (number of files to remark in parallel): ';
             num_workers = str2double(input(worker_text , 's'));
         end
-        fprintf('Will remark %d files at a time...', num_workers);
+        fprintf('Will remark %d files at a time...\n', num_workers);
     elseif strcmp(par_option,'n')
-        disp('Will remark each file one at a time...');
+        disp('Will remark each file one at a time...\n');
     end
 
     % overwrite remarked files?
@@ -168,6 +172,8 @@ elseif strcmp(runRemarking_reply,'y') % run remarking
     % set up error cell
     n = length(IDX);
     errorRemarking = cell(n,4);
+    % Print how many EEGs found
+    fprintf("Found %d %s EEG files for %s\n", n, task, study)
 
     % loop over all specific task EEGs
     if strcmp(par_option,'y')
@@ -293,6 +299,8 @@ end
 setfilesDir = [paths.remarked, '/*.set'];
 remarked_files = all_remarked_set(setfilesDir);
 n = length(remarked_files); % number of EEG sets to preprocess
+% Print how many EEGs found
+fprintf("Found %d remarked %s EEG files for %s\n", n, task, study)
 
 %% start preprocessing_pipeline_V2()
 % overwrite preprocessing files?
@@ -437,15 +445,15 @@ elseif strcmp(fullrun_response,'y')
             worker_text = 'Enter number of workers to use (number of files to process in parallel): ';
             num_workers = str2double(input(worker_text , 's'));
         end
-        fprintf('Will process %d files at a time...', num_workers);
+        fprintf('Will process %d files at a time...\n', num_workers);
     elseif strcmp(par_option,'n')
-        disp('Will process each file one at a time...');
+        disp('Will process each file one at a time...\n');
     end
     
     % TODO: add ability to specify step in parallel and non parallel full dataset runs
     % restart from beginning or pick up from a particular step?
     step_response = input("Run entire preprocessing pipeline (y/n)?: ",'s');
-    if strcmp(step_response,'n') % run entire preprocessing pipeline
+    if strcmp(step_response,'y') % run entire preprocessing pipeline
         %% Run entire preprocessing pipeline over entire dataset
         % saving input files that failed to be preprocessed
         errorProcessing = cell(n,4);
@@ -460,7 +468,7 @@ elseif strcmp(fullrun_response,'y')
                 if p.NumWorkers == num_workers % keep exisiting parpool if workers are the same number as workers specified
                     fprintf("Parallel pool already running with specified number of workers\n")
                 else % delete current parpool and create new parpool if current does not match specified number of workers
-                    fprintf("Parallel pool running has %d workers; not %d workers specified...\nDeleting and starting new parallel pool with %d workers",...
+                    fprintf("Parallel pool running has %d workers; not %d workers specified...\nDeleting and starting new parallel pool with %d workers\n",...
                         p.NumWorkers, num_workers, num_workers)         
                     delete(gcp('nocreate'))
                     parpool(num_workers)
@@ -552,7 +560,7 @@ elseif strcmp(fullrun_response,'y')
         end
         errorProcessing = errorProcessing(~cellfun(@isempty,errorProcessing(:,1)),:);
         allErrors.processing = errorProcessing; 
-    elseif strcmp(step_response,'y')
+    elseif strcmp(step_response,'n')
         %% Run preprocessing pipeline from a specific step over all subjects
         % prompt user to chose step to start from 
         stepChoice_msg = sprintf("Steps:\n  (1) Reference to mastoids, filter (bandpass and notch), and downsample \n  (2) Channel rejection\n  (3) Channel interpolation\n  (4) Rerefernce to average\n  (5) Generate ICs\n  (6) Apply ICs\n  (7) IC rejection\n  (8) QC figure\nSelection: ");

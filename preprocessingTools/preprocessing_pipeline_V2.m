@@ -12,9 +12,9 @@ arguments
     overwrite
     task
     study
-    eeg_age (1,1) double = []
-    ses (1,1) double = []
-    step (1,1) double = []
+    eeg_age (1,1) double = NaN
+    ses (1,1) double = NaN
+    step = []
     FLAG_manualICrej = 0
 end
 
@@ -110,7 +110,12 @@ else % if filtered EEG does not exist running rereferencing, filtering, and resa
         step = []; % set step to empty to continue preproc as usual for following steps
     elseif step ~= 1 % if step is specified but it is not set to 1 (filter step) load filtered EEG and continue to next step
         warning("Loading %s filtered EEG",currentName)
-        EEG = pop_loadset(filteredFile);        
+        EEG = pop_loadset(filteredFile); 
+        if size(EEG.data,1) < 100
+            Flag128 = 0;
+        else
+            Flag128 = 1;            
+        end
     end
 end
 
@@ -143,7 +148,12 @@ else
         step = []; % set step to empty to continue preproc as usual for following steps
     elseif step ~= 2 % if step is specified but it is not set to 2 (channel rejection step) load channel rejected EEG and continue to next step
         warning("Loading %s channel rejection EEG",currentName)
-        EEG = pop_loadset(chanrjfile);        
+        EEG = pop_loadset(chanrjfile);  
+        if size(EEG.data,1) < 100
+            Flag128 = 0;
+        else
+            Flag128 = 1;            
+        end
     end
 end
 
@@ -164,7 +174,12 @@ else
         step = []; % set step to empty to continue preproc as usual for following steps
     elseif step ~= 3 % if step is specified but it is not set to 3 (channel interpolation step) load channel interpolated EEG and continue to next step
         warning("Loading %s channel interpolation EEG",currentName)
-        EEG = pop_loadset(interpfile);        
+        EEG = pop_loadset(interpfile); 
+        if size(EEG.data,1) < 100
+            Flag128 = 0;
+        else
+            Flag128 = 1;            
+        end
     end
 end
 
@@ -182,7 +197,12 @@ else
         step = []; % set step to empty to continue preproc as usual for following steps
     elseif step ~= 4 % if step is specified but it is not set to 4 (rereference step) load rereferenced EEG and continue to next step
         warning("Loading %s rereferenced EEG",currentName)
-        EEG = pop_loadset(rerefFile);        
+        EEG = pop_loadset(rerefFile);   
+        if size(EEG.data,1) < 100
+            Flag128 = 0;
+        else
+            Flag128 = 1;            
+        end
     end
 end
 
@@ -220,7 +240,12 @@ else
         
     elseif step ~= 5 % if step is specified but it is not set to 5 (run ICA step) load reref EEG (to maintain correct sampling rate) and continue to next step
         warning("Loading %s rereferenced EEG",currentName)
-        EEG = pop_loadset(rerefFile);        
+        EEG = pop_loadset(rerefFile);    
+        if size(EEG.data,1) < 100
+            Flag128 = 0;
+        else
+            Flag128 = 1;            
+        end
     end
 end
 
@@ -256,7 +281,12 @@ else
         
     elseif step ~= 6 % if step is specified but it is not set to 6 (apply ICA step) load whole ICA EEG and continue to next step
         warning("Loading %s whole ICA EEG",currentName)
-        EEG = pop_loadset(WholeICAFile);        
+        EEG = pop_loadset(WholeICAFile);      
+        if size(EEG.data,1) < 100
+            Flag128 = 0;
+        else
+            Flag128 = 1;            
+        end
     end
 end
 
@@ -278,7 +308,12 @@ else
 
         elseif step ~= 7 % if step is specified but it is not set to 7 (ICA rejection step) load ICA rejected EEG and continue to next step
             warning("Loading %s IC rejected EEG",currentName)
-            EEG = pop_loadset(CleanICAFile);        
+            EEG = pop_loadset(CleanICAFile);      
+            if size(EEG.data,1) < 100
+                Flag128 = 0;
+            else
+                Flag128 = 1;
+            end
         end
         
     else % Automatic IC rejection 
@@ -293,7 +328,12 @@ else
 
         elseif step ~= 7 % if step is specified but it is not set to 7 (ICA rejection step) load ICA rejected EEG and continue to next step
             warning("Loading %s IC rejected EEG",currentName)
-            EEG = pop_loadset(CleanICAFile);        
+            EEG = pop_loadset(CleanICAFile);    
+            if size(EEG.data,1) < 100
+                Flag128 = 0;
+            else
+                Flag128 = 1;            
+            end
         end
     end
 end
